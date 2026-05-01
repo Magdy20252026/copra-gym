@@ -14,7 +14,7 @@ if (!isset($_SESSION['user_id'])) {
 require_once 'config.php';
 require_once 'trainers_helpers.php';
 require_once 'input_normalization_helpers.php';
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
