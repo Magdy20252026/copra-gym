@@ -439,7 +439,7 @@ $notifications = getManualBroadcastMemberNotifications($pdo, 100);
                                 <div class="notification-head">
                                     <div>
                                         <div class="notification-title"><?php echo htmlspecialchars($notification['title']); ?></div>
-                                        <div class="notification-time"><?php echo htmlspecialchars($notification['created_at']); ?></div>
+                                        <div class="notification-time"><?php echo htmlspecialchars(formatAppDateTime12Hour($notification['created_at'])); ?></div>
                                     </div>
                                     <form method="post" onsubmit="return confirm('هل تريد حذف هذا الإشعار؟');">
                                         <input type="hidden" name="action" value="delete_notification">

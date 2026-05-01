@@ -567,7 +567,7 @@ if ($selectedEmployeeData && $formData['employee_search'] === '') {
                                 <td class="amount-cell"><?php echo number_format((float)$row['amount'], 2); ?></td>
                                 <td><?php echo htmlspecialchars($row['notes'] ?: '—'); ?></td>
                                 <td><?php echo htmlspecialchars($row['created_by_username'] ?: '—'); ?></td>
-                                <td><?php echo htmlspecialchars($row['created_at']); ?></td>
+                                <td><?php echo htmlspecialchars(formatAppDateTime12Hour($row['created_at'])); ?></td>
                                 <?php if ($isManager): ?>
                                     <td class="actions-cell">
                                         <div class="table-actions">

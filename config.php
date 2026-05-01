@@ -22,6 +22,8 @@ if (!function_exists('appMysqlSessionTimeZoneOffset')) {
 
 date_default_timezone_set(appTimezoneName());
 
+require_once __DIR__ . '/datetime_format_helpers.php';
+
 $host     = "sql202.infinityfree.com";
 $dbname   = "if0_41408267_club_01";
 $username = "if0_41408267";

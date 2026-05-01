@@ -34,7 +34,7 @@ function formatEmployeePayrollMoment($dateTime)
         return (string)$dateTime;
     }
 
-    return date('Y-m-d H:i:s', $timestamp);
+    return formatAppDateTime12Hour(date('Y-m-d H:i:s', $timestamp));
 }
 
 $siteName = "Gym System";
@@ -660,7 +660,7 @@ if ($selectedEmployeeData && $formData['employee_search'] === '') {
                                     <td class="amount-cell"><?php echo number_format((float)$advanceRow['amount'], 2); ?></td>
                                     <td><?php echo htmlspecialchars($advanceRow['notes'] ?: '—'); ?></td>
                                     <td><?php echo htmlspecialchars($advanceRow['created_by_username'] ?: '—'); ?></td>
-                                    <td><?php echo htmlspecialchars($advanceRow['created_at']); ?></td>
+                                    <td><?php echo htmlspecialchars(formatAppDateTime12Hour($advanceRow['created_at'])); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                             </tbody>

@@ -299,7 +299,7 @@ $receiptBarcode = normalizeReceiptBarcode($receipt['barcode'] ?? '');
     <div class="title"><?php echo htmlspecialchars($siteName); ?></div>
 
     <div class="meta">إيصال اشتراك</div>
-    <div class="meta">التاريخ والوقت: <?php echo htmlspecialchars($receipt['created_at']); ?></div>
+    <div class="meta">التاريخ والوقت: <?php echo htmlspecialchars(formatAppDateTime12Hour($receipt['created_at'])); ?></div>
     <div class="meta">اسم المستخدم: <?php echo htmlspecialchars($receipt['created_by_username'] !== '' ? $receipt['created_by_username'] : '—'); ?></div>
     <div class="meta">اسم المشترك: <?php echo htmlspecialchars($receipt['member_name']); ?></div>
     <?php if ($receiptBarcode !== ''): ?>

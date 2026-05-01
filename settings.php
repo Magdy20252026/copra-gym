@@ -156,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
             continue;
         }
         if ($scheduleLabel === '') {
-            $scheduleLabel = "من {$scheduleFrom} إلى {$scheduleTo}";
+            $scheduleLabel = 'من ' . formatAppTime12Hour($scheduleFrom) . ' إلى ' . formatAppTime12Hour($scheduleTo);
         }
         $newWorkSchedules[] = [
             'label' => $scheduleLabel,
