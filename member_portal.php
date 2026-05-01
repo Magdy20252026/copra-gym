@@ -650,7 +650,7 @@ function barcodeImgUrl($text) {
                                 <?php foreach ($memberNotifications as $notification): ?>
                                     <div class="notification-item notification-item--<?php echo htmlspecialchars($notification['notification_type']); ?>">
                                         <div class="notification-item-title"><?php echo htmlspecialchars($notification['title']); ?></div>
-                                        <div class="notification-item-message"><?php echo nl2br(htmlspecialchars($notification['message'])); ?></div>
+                                        <div class="notification-item-message"><?php echo htmlspecialchars($notification['message']); ?></div>
                                         <div class="notification-item-time"><?php echo htmlspecialchars($notification['created_at']); ?></div>
                                     </div>
                                 <?php endforeach; ?>

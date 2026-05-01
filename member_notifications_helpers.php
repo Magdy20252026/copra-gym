@@ -50,13 +50,15 @@ function getManualBroadcastMemberNotifications(PDO $pdo, int $limit = 100): arra
     ensureMemberNotificationsSchema($pdo);
 
     $limit = max(1, min(200, $limit));
-    $stmt = $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT id, title, message, created_at
         FROM member_notifications
         WHERE audience = 'all' AND notification_type = 'manual'
         ORDER BY created_at DESC, id DESC
-        LIMIT {$limit}
+        LIMIT :limit
     ");
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
 
     return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 }
@@ -232,9 +234,11 @@ function getMemberPortalNotifications(PDO $pdo, int $memberId, int $limit = 20):
         WHERE audience = 'all'
            OR (audience = 'member' AND member_id = :member_id)
         ORDER BY created_at DESC, id DESC
-        LIMIT {$limit}
+        LIMIT :limit
     ");
-    $stmt->execute([':member_id' => $memberId]);
+    $stmt->bindValue(':member_id', $memberId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
 
     return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
