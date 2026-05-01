@@ -232,7 +232,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         $maxSize   = 2 * 1024 * 1024; // 2MB
 
         if ($file['error'] === UPLOAD_ERR_OK) {
-            $detectedMimeType = null;
             if ($file['size'] > $maxSize) {
                 $errors[] = "حجم ملف الشعار يجب ألا يزيد عن 2 ميجابايت.";
             } else {
