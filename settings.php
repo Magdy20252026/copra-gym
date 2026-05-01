@@ -14,6 +14,31 @@ ensureExtendedSiteSettingsSchema($pdo);
 
 define('SITE_SETTINGS_TIME_REFERENCE_DATE', '1970-01-01');
 
+function detectUploadedImageMimeType(string $filePath): ?string
+{
+    if (!is_file($filePath)) {
+        return null;
+    }
+
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo !== false) {
+            $mimeType = finfo_file($finfo, $filePath);
+            finfo_close($finfo);
+            if (is_string($mimeType) && $mimeType !== '') {
+                return $mimeType;
+            }
+        }
+    }
+
+    $imageInfo = @getimagesize($filePath);
+    if (!empty($imageInfo['mime']) && is_string($imageInfo['mime'])) {
+        return $imageInfo['mime'];
+    }
+
+    return null;
+}
+
 // تحميل الإعدادات الحالية
 $siteName = "Gym System";
 $logoPath = null;
@@ -196,29 +221,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
 
     if (!empty($_FILES['logo']['name'])) {
         $file      = $_FILES['logo'];
-        $allowed   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        $allowedMimeTypes = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            // بعض المتصفحات أو الخوادم القديمة قد ترسل PNG بهذه الصيغة غير القياسية.
+            'image/x-png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+        ];
         $maxSize   = 2 * 1024 * 1024; // 2MB
 
         if ($file['error'] === UPLOAD_ERR_OK) {
-            if (!in_array($file['type'], $allowed, true)) {
-                $errors[] = "نوع ملف الشعار غير مسموح (يُسمح بـ JPG/PNG/WebP/GIF).";
-            } elseif ($file['size'] > $maxSize) {
+            if ($file['size'] > $maxSize) {
                 $errors[] = "حجم ملف الشعار يجب ألا يزيد عن 2 ميجابايت.";
             } else {
-                // مجلد الرفع (تأكد من وجوده وصلاحياته)
-                $uploadDir  = 'uploads/';
-                if (!is_dir($uploadDir)) {
-                    @mkdir($uploadDir, 0777, true);
-                }
-
-                $ext        = pathinfo($file['name'], PATHINFO_EXTENSION);
-                $fileName   = 'logo_' . time() . '_' . rand(1000, 9999) . '.' . $ext;
-                $targetPath = $uploadDir . $fileName;
-
-                if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-                    $newLogoPath = $targetPath;
+                $tmpFilePath = trim((string)($file['tmp_name'] ?? ''));
+                $detectedMimeType = $tmpFilePath !== '' ? detectUploadedImageMimeType($tmpFilePath) : null;
+                if ($detectedMimeType === null || !isset($allowedMimeTypes[$detectedMimeType])) {
+                    $errors[] = "نوع ملف الشعار غير مسموح (يُسمح بـ JPG/PNG/WebP/GIF).";
                 } else {
-                    $errors[] = "فشل رفع ملف الشعار.";
+                    // مجلد الرفع (تأكد من وجوده وصلاحياته)
+                    $uploadDir  = 'uploads/';
+                    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+                        $errors[] = "تعذر إنشاء مجلد حفظ الشعار.";
+                    } else {
+                        $ext = $allowedMimeTypes[$detectedMimeType];
+                        try {
+                            $fileName = 'logo_' . bin2hex(random_bytes(16)) . '.' . $ext;
+                            $targetPath = $uploadDir . $fileName;
+
+                            if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                                $newLogoPath = $targetPath;
+                            } else {
+                                $errors[] = "فشل رفع ملف الشعار.";
+                            }
+                        } catch (Exception $e) {
+                            $errors[] = "تعذر تجهيز اسم آمن لملف الشعار.";
+                        }
+                    }
                 }
             }
         } else {
