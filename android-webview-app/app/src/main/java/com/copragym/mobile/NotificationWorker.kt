@@ -46,6 +46,6 @@ class NotificationWorker(
             }
 
         AppPreferences.saveLastNotificationId(applicationContext, portalState.latestNotificationId)
-        Result.success()
+        return Result.success()
     }
 }

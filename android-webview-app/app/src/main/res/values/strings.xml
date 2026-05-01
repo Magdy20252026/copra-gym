@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Copra Gym</string>
+    <string name="app_name">بوابة الجيم</string>
     <string name="notification_channel_name">إشعارات الاشتراك</string>
     <string name="notification_channel_description">إشعارات المشتركين من بوابة الجيم</string>
     <string name="download_saved_message">تم حفظ الملف داخل التطبيق: %1$s</string>
