@@ -88,12 +88,7 @@ android {
     }
 
     sourceSets {
-        getByName("main").res.srcDir(generatedLauncherResDir)
-    }
-    applicationVariants.all {
-        mergeResourcesProvider.configure {
-            dependsOn(generateLauncherPngResources)
-        }
+        getByName("main").res.srcDir(generateLauncherPngResources)
     }
 }
 
