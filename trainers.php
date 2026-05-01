@@ -785,7 +785,7 @@ foreach ($trainers as $trainerRow) {
                                 $movementAmount = (float)$movementDisplay['commission_amount'];
                             ?>
                             <tr>
-                                <td><?php echo htmlspecialchars($movementDisplay['created_at']); ?></td>
+                                <td><?php echo htmlspecialchars(formatAppDateTime12Hour($movementDisplay['created_at'])); ?></td>
                                 <td><?php echo htmlspecialchars($movementDisplay['movement_type_label']); ?></td>
                                 <td><?php echo htmlspecialchars($movementDisplay['statement']); ?></td>
                                 <td><?php echo htmlspecialchars($movementDisplay['member_name']); ?></td>

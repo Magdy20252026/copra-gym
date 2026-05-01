@@ -1030,7 +1030,7 @@ try {
                                 <?php endif; ?>
                             </td>
                             <td><?php echo htmlspecialchars($row['notes'] ?? ''); ?></td>
-                            <td><?php echo htmlspecialchars($row['created_at']); ?></td>
+                            <td><?php echo htmlspecialchars(formatAppDateTime12Hour($row['created_at'])); ?></td>
                             <td><?php echo htmlspecialchars($row['m_age'] ?? ''); ?></td>
                             <td><?php echo htmlspecialchars($row['m_gender'] ?? ''); ?></td>
                             <td><?php echo htmlspecialchars($row['m_address'] ?? ''); ?></td>

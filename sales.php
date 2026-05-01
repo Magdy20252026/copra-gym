@@ -621,7 +621,7 @@ if (!$formData['lines']) {
                     <tbody>
                     <?php foreach ($todaySales as $sale): ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($sale['created_at']); ?></td>
+                            <td><?php echo htmlspecialchars(formatAppDateTime12Hour($sale['created_at'])); ?></td>
                             <td><?php echo htmlspecialchars($sale['invoice_number']); ?></td>
                             <td>
                                 <span class="type-badge <?php echo $sale['transaction_type'] === 'مرتجع' ? 'type-return' : 'type-sale'; ?>">

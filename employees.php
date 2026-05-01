@@ -554,7 +554,7 @@ $offDayOptions = getEmployeeOffDayOptions();
                             <td><?php echo htmlspecialchars(formatEmployeeTime($employee['attendance_time'])); ?></td>
                             <td><?php echo htmlspecialchars(formatEmployeeTime($employee['departure_time'])); ?></td>
                             <td><?php echo htmlspecialchars(formatEmployeeOffDays($employee['off_days'])); ?></td>
-                            <td><?php echo htmlspecialchars($employee['created_at']); ?></td>
+                            <td><?php echo htmlspecialchars(formatAppDateTime12Hour($employee['created_at'])); ?></td>
                             <td>
                                 <div class="actions">
                                     <button

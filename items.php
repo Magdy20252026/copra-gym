@@ -419,7 +419,7 @@ try {
                             </td>
                             <td><?php echo (int)$item['has_quantity'] === 1 ? (int)$item['item_count'] : '—'; ?></td>
                             <td><?php echo is_null($item['price']) ? '—' : number_format((float)$item['price'], 2); ?></td>
-                            <td><?php echo htmlspecialchars($item['created_at']); ?></td>
+                            <td><?php echo htmlspecialchars(formatAppDateTime12Hour($item['created_at'])); ?></td>
                             <td>
                                 <div class="actions">
                                     <button

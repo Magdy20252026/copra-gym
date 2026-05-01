@@ -274,7 +274,7 @@ $effectivePageMarginMm = $receiptPageMarginMm !== null ? $receiptPageMarginMm : 
     <div class="title"><?php echo htmlspecialchars($siteName); ?></div>
 
     <div class="meta">رقم الفاتورة: <?php echo htmlspecialchars($invoice['invoice_number']); ?></div>
-    <div class="meta">التاريخ والوقت: <?php echo htmlspecialchars($invoice['created_at']); ?></div>
+    <div class="meta">التاريخ والوقت: <?php echo htmlspecialchars(formatAppDateTime12Hour($invoice['created_at'])); ?></div>
     <div class="meta">نوع العملية: <?php echo htmlspecialchars($invoice['transaction_type']); ?></div>
     <div class="meta">اسم الكاشير: <?php echo htmlspecialchars($invoice['cashier_name']); ?></div>
 

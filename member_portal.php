@@ -712,7 +712,7 @@ function barcodeImgUrl($text) {
                                     <div class="notification-item notification-item--<?php echo htmlspecialchars($notification['notification_type']); ?>">
                                         <div class="notification-item-title"><?php echo htmlspecialchars($notification['title']); ?></div>
                                         <div class="notification-item-message"><?php echo htmlspecialchars($notification['message']); ?></div>
-                                        <div class="notification-item-time"><?php echo htmlspecialchars($notification['created_at']); ?></div>
+                                        <div class="notification-item-time"><?php echo htmlspecialchars(formatAppDateTime12Hour($notification['created_at'])); ?></div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -937,14 +937,14 @@ function barcodeImgUrl($text) {
                     $hasWorkSchedules = true;
                     $scheduleLabel = trim((string)($scheduleEntry['label'] ?? ''));
                     if ($scheduleLabel === '') {
-                        $scheduleLabel = "من {$scheduleFrom} إلى {$scheduleTo}";
+                        $scheduleLabel = 'من ' . formatAppTime12Hour($scheduleFrom) . ' إلى ' . formatAppTime12Hour($scheduleTo);
                     }
                     $scheduleAudience = trim((string)($scheduleEntry['audience'] ?? 'all'));
                     $scheduleAudienceLabel = $scheduleAudienceOptions[$scheduleAudience] ?? $scheduleAudienceOptions['all'];
                 ?>
                     <div class="portal-footer-item">
                         <strong><?php echo htmlspecialchars($scheduleLabel); ?></strong>
-                        <span>الوقت: <?php echo htmlspecialchars($scheduleFrom . ' - ' . $scheduleTo); ?></span>
+                        <span>الوقت: <?php echo htmlspecialchars(formatAppTime12Hour($scheduleFrom) . ' - ' . formatAppTime12Hour($scheduleTo)); ?></span>
                         <span>الفئة: <?php echo htmlspecialchars($scheduleAudienceLabel); ?></span>
                     </div>
                 <?php endforeach; ?>
@@ -974,6 +974,39 @@ function barcodeImgUrl($text) {
         switchEl.addEventListener('click', () => {
             const isDark = body.classList.contains('dark');
             applyTheme(isDark ? 'light' : 'dark');
+        });
+    }
+
+    const memberPhoneStorageKey = 'gymPortalLastMemberPhone';
+    const phoneInputEl = document.getElementById('phone');
+    const searchForm = document.querySelector('.search-box');
+    const currentMemberPhone = <?php echo json_encode($memberData['phone'] ?? '', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const currentSearchPhone = <?php echo json_encode($phoneInput, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const wasAutoRestored = <?php echo json_encode(isset($_GET['restored']) && (string)$_GET['restored'] === '1'); ?>;
+
+    if (currentMemberPhone) {
+        localStorage.setItem(memberPhoneStorageKey, currentMemberPhone);
+        if (window.TheClubGymAndroid && typeof window.TheClubGymAndroid.saveLastMemberPhone === 'function') {
+            window.TheClubGymAndroid.saveLastMemberPhone(currentMemberPhone);
+        }
+    } else if (wasAutoRestored && currentSearchPhone) {
+        localStorage.removeItem(memberPhoneStorageKey);
+        if (window.TheClubGymAndroid && typeof window.TheClubGymAndroid.clearLastMemberPhone === 'function') {
+            window.TheClubGymAndroid.clearLastMemberPhone();
+        }
+    } else if (!currentSearchPhone) {
+        const savedPhone = localStorage.getItem(memberPhoneStorageKey);
+        if (savedPhone) {
+            const restoredUrl = new URL(window.location.href);
+            restoredUrl.searchParams.set('phone', savedPhone);
+            restoredUrl.searchParams.set('restored', '1');
+            window.location.replace(restoredUrl.toString());
+        }
+    }
+
+    if (searchForm && phoneInputEl) {
+        searchForm.addEventListener('submit', () => {
+            phoneInputEl.value = phoneInputEl.value.trim();
         });
     }
 

@@ -25,7 +25,7 @@ function formatEmployeeAttendanceMoment($dateTime)
         return (string)$dateTime;
     }
 
-    return date('Y-m-d H:i:s', $timestamp);
+    return formatAppDateTime12Hour(date('Y-m-d H:i:s', $timestamp));
 }
 
 $siteName = "Gym System";
