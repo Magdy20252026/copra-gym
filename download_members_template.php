@@ -12,7 +12,7 @@ if (!isset($_SESSION['user_id'])) {
 
 require_once 'config.php';
 require_once 'trainers_helpers.php';
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
