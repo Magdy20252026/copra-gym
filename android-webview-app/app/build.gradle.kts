@@ -6,6 +6,7 @@ apply(plugin = "com.android.application")
 apply(plugin = "org.jetbrains.kotlin.android")
 
 val launcherSourcePng = layout.projectDirectory.file("src/main/res/drawable-nodpi/app_logo.png")
+val launcherSourceRelativePath = "src/main/res/drawable-nodpi/app_logo.png"
 val generatedLauncherResDir = layout.buildDirectory.dir("generated/res/customLauncher")
 
 val generateLauncherPngResources by tasks.registering {
@@ -15,7 +16,7 @@ val generateLauncherPngResources by tasks.registering {
     doLast {
         val sourceImage = ImageIO.read(launcherSourcePng.asFile)
             ?: error(
-                "Unable to read launcher PNG at ${launcherSourcePng.asFile}. " +
+                "Unable to read launcher PNG at $launcherSourceRelativePath. " +
                     "Make sure the file exists and is a valid PNG image."
             )
         val outputRoot = generatedLauncherResDir.get().asFile
