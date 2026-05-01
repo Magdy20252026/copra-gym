@@ -49,6 +49,8 @@ val generateLauncherPngResources by tasks.registering {
     }
 }
 
+val generatedLauncherResFiles = files(generatedLauncherResDir).builtBy(generateLauncherPngResources)
+
 android {
     namespace = "com.copragym.mobile"
     compileSdk = 34
@@ -88,12 +90,7 @@ android {
     }
 
     sourceSets {
-        getByName("main").res.srcDir(generatedLauncherResDir)
-    }
-    applicationVariants.all {
-        mergeResourcesProvider.configure {
-            dependsOn(generateLauncherPngResources)
-        }
+        getByName("main").res.srcDir(generatedLauncherResFiles)
     }
 }
 
