@@ -90,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
     }
 
     $newTransferNumbers = [];
-    $transferNumbers = [];
+    $postedTransferEntries = [];
     $transferRowsCount = max(
         is_array($postedTransferNumbers) ? count($postedTransferNumbers) : 0,
         is_array($postedTransferTypes) ? count($postedTransferTypes) : 0
@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         if (!isset($transferTypeOptions[$transferType])) {
             $transferType = 'wallet';
         }
-        $transferNumbers[] = [
+        $postedTransferEntries[] = [
             'number' => $transferNumber,
             'type' => $transferType,
         ];
@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
     }
 
     $newWorkSchedules = [];
-    $workSchedules = [];
+    $postedWorkScheduleEntries = [];
     $scheduleRowsCount = max(
         is_array($postedScheduleLabels) ? count($postedScheduleLabels) : 0,
         is_array($postedScheduleFrom) ? count($postedScheduleFrom) : 0,
@@ -130,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         if (!isset($scheduleAudienceOptions[$scheduleAudience])) {
             $scheduleAudience = 'all';
         }
-        $workSchedules[] = [
+        $postedWorkScheduleEntries[] = [
             'label' => $scheduleLabel,
             'from' => $scheduleFrom,
             'to' => $scheduleTo,
@@ -147,7 +147,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
             $errors[] = "صيغة مواعيد العمل غير صحيحة.";
             continue;
         }
-        if ($scheduleFrom >= $scheduleTo) {
+        $scheduleFromTimestamp = strtotime('1970-01-01 ' . $scheduleFrom);
+        $scheduleToTimestamp = strtotime('1970-01-01 ' . $scheduleTo);
+        if ($scheduleFromTimestamp === false || $scheduleToTimestamp === false || $scheduleFromTimestamp >= $scheduleToTimestamp) {
             $errors[] = "وقت بداية الموعد يجب أن يكون قبل وقت النهاية.";
             continue;
         }
@@ -167,8 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
             ['number' => '', 'type' => 'wallet'],
         ];
     }
-    if (!$transferNumbers) {
-        $transferNumbers = [
+    if (!$postedTransferEntries) {
+        $postedTransferEntries = [
             ['number' => '', 'type' => 'wallet'],
         ];
     }
@@ -178,11 +180,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
             ['label' => '', 'from' => '', 'to' => '', 'audience' => 'all'],
         ];
     }
-    if (!$workSchedules) {
-        $workSchedules = [
+    if (!$postedWorkScheduleEntries) {
+        $postedWorkScheduleEntries = [
             ['label' => '', 'from' => '', 'to' => '', 'audience' => 'all'],
         ];
     }
+
+    $transferNumbers = $postedTransferEntries;
+    $workSchedules = $postedWorkScheduleEntries;
 
     // معالجة الشعار
     $newLogoPath = $logoPath; // القيمة القديمة افتراضيًا

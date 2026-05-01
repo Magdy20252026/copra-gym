@@ -76,5 +76,9 @@ function decodeSiteSettingsJsonList($value): array
     }
 
     $decoded = json_decode($value, true);
-    return is_array($decoded) ? $decoded : [];
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+        return [];
+    }
+
+    return $decoded;
 }
