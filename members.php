@@ -1899,7 +1899,7 @@ $paginationBaseParams = [
 
                 <div class="field">
                     <label for="m_barcode">باركود المشترك</label>
-                    <input type="text" id="m_barcode" name="barcode" value="" required pattern=".*\S.*" title="من فضلك اكتب باركود المشترك.">
+                    <input type="text" id="m_barcode" name="barcode" value="" required pattern=".*\S.*" title="من فضلك اكتب باركود المشترك، ولا تتركه فارغاً أو مكوّناً من مسافات فقط.">
                     <div class="muted">اكتب الباركود يدوياً لكل مشترك، ويجب أن يكون غير مكرر.</div>
                 </div>
 
