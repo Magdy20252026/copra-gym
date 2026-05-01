@@ -197,14 +197,15 @@ function syncMemberSubscriptionNotifications(PDO $pdo, int $memberId): void
     }
 
     if ($endDate >= $today) {
-        $daysLeft = (int)$today->diff($endDate)->days;
+        $daysLeft = (int)floor(($endDate->getTimestamp() - $today->getTimestamp()) / 86400);
         if ($daysLeft <= 5) {
-            $daysText = 'اليوم';
-            if ($daysLeft === 1) {
+            if ($daysLeft === 0) {
+                $daysText = 'اليوم';
+            } elseif ($daysLeft === 1) {
                 $daysText = 'بعد يوم واحد';
             } elseif ($daysLeft === 2) {
                 $daysText = 'بعد يومين';
-            } elseif ($daysLeft >= 3) {
+            } else {
                 $daysText = 'بعد ' . $daysLeft . ' أيام';
             }
 
