@@ -2,8 +2,10 @@ import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 
-apply(plugin = "com.android.application")
-apply(plugin = "org.jetbrains.kotlin.android")
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
 
 val launcherSourcePng = layout.projectDirectory.file("src/main/res/drawable-nodpi/app_logo.png")
 val launcherSourceRelativePath = "src/main/res/drawable-nodpi/app_logo.png"
