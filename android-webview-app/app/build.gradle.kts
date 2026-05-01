@@ -1,3 +1,7 @@
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
+
 apply(plugin = "com.android.application")
 apply(plugin = "org.jetbrains.kotlin.android")
 
@@ -9,11 +13,35 @@ val generateLauncherPngResources by tasks.registering {
     outputs.dir(generatedLauncherResDir)
 
     doLast {
-        val mipmapDir = generatedLauncherResDir.get().asFile.resolve("mipmap")
-        mipmapDir.mkdirs()
+        val sourceImage = ImageIO.read(launcherSourcePng.asFile)
+            ?: error("Unable to read launcher PNG: ${launcherSourcePng.asFile}")
+        val outputRoot = generatedLauncherResDir.get().asFile
+        val densities = mapOf(
+            "mipmap-mdpi" to 48,
+            "mipmap-hdpi" to 72,
+            "mipmap-xhdpi" to 96,
+            "mipmap-xxhdpi" to 144,
+            "mipmap-xxxhdpi" to 192
+        )
 
-        launcherSourcePng.asFile.copyTo(mipmapDir.resolve("ic_launcher.png"), overwrite = true)
-        launcherSourcePng.asFile.copyTo(mipmapDir.resolve("ic_launcher_round.png"), overwrite = true)
+        outputRoot.deleteRecursively()
+
+        densities.forEach { (directoryName, iconSize) ->
+            val scaledImage = BufferedImage(iconSize, iconSize, BufferedImage.TYPE_INT_ARGB)
+            val graphics = scaledImage.createGraphics()
+
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY)
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            graphics.drawImage(sourceImage, 0, 0, iconSize, iconSize, null)
+            graphics.dispose()
+
+            val outputDir = outputRoot.resolve(directoryName)
+            outputDir.mkdirs()
+
+            ImageIO.write(scaledImage, "png", outputDir.resolve("ic_launcher.png"))
+            ImageIO.write(scaledImage, "png", outputDir.resolve("ic_launcher_round.png"))
+        }
     }
 }
 
