@@ -12,6 +12,8 @@ require_once 'site_settings_helpers.php';
 
 ensureExtendedSiteSettingsSchema($pdo);
 
+define('SITE_SETTINGS_TIME_REFERENCE_DATE', '1970-01-01');
+
 // تحميل الإعدادات الحالية
 $siteName = "Gym System";
 $logoPath = null;
@@ -147,8 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
             $errors[] = "صيغة مواعيد العمل غير صحيحة.";
             continue;
         }
-        $scheduleFromTimestamp = strtotime('1970-01-01 ' . $scheduleFrom);
-        $scheduleToTimestamp = strtotime('1970-01-01 ' . $scheduleTo);
+        $scheduleFromTimestamp = strtotime(SITE_SETTINGS_TIME_REFERENCE_DATE . ' ' . $scheduleFrom);
+        $scheduleToTimestamp = strtotime(SITE_SETTINGS_TIME_REFERENCE_DATE . ' ' . $scheduleTo);
         if ($scheduleFromTimestamp === false || $scheduleToTimestamp === false || $scheduleFromTimestamp >= $scheduleToTimestamp) {
             $errors[] = "وقت بداية الموعد يجب أن يكون قبل وقت النهاية.";
             continue;
@@ -738,7 +740,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                     </div>
 
                     <div class="field">
-                        <label for="receipt_footer_text">الجملة الظاهرة أسفل الفاتورة</label>
+                        <label for="receipt_footer_text">الجملة المعروضة أسفل الفاتورة</label>
                         <textarea id="receipt_footer_text" name="receipt_footer_text" <?php echo !$isManager ? 'disabled' : ''; ?>><?php echo htmlspecialchars($receiptFooterText); ?></textarea>
                         <div class="muted">سيتم إظهار هذه الجملة في نهاية فاتورة المبيعات، مثل: الاشتراك لا يسترد.</div>
                     </div>
