@@ -85,7 +85,9 @@ android {
         buildConfig = true
     }
 
-    sourceSets.getByName("main").res.srcDir(generatedLauncherResDir)
+    sourceSets {
+        getByName("main").res.srcDir(generatedLauncherResDir)
+    }
 }
 
 tasks.named("preBuild") {
