@@ -12,15 +12,19 @@ require_once 'site_settings_helpers.php';
 
 ensureExtendedSiteSettingsSchema($pdo);
 
+define('SITE_SETTINGS_TIME_REFERENCE_DATE', '1970-01-01');
+
 // تحميل الإعدادات الحالية
 $siteName = "Gym System";
 $logoPath = null;
 $receiptPaperWidthMm = '';
 $receiptPageMarginMm = '';
 $receiptFooterText = 'الاشتراك لا يسترد';
+$transferNumbers = [];
+$workSchedules = [];
 
 try {
-    $stmt = $pdo->query("SELECT site_name, logo_path, receipt_paper_width_mm, receipt_page_margin_mm, receipt_footer_text FROM site_settings ORDER BY id ASC LIMIT 1");
+    $stmt = $pdo->query("SELECT site_name, logo_path, receipt_paper_width_mm, receipt_page_margin_mm, receipt_footer_text, transfer_numbers_json, work_schedules_json FROM site_settings ORDER BY id ASC LIMIT 1");
     if ($row = $stmt->fetch()) {
         $siteName = $row['site_name'];
         $logoPath = $row['logo_path'];
@@ -29,8 +33,25 @@ try {
         if (!empty($row['receipt_footer_text'])) {
             $receiptFooterText = $row['receipt_footer_text'];
         }
+        $transferNumbers = decodeSiteSettingsJsonList($row['transfer_numbers_json'] ?? null);
+        $workSchedules = decodeSiteSettingsJsonList($row['work_schedules_json'] ?? null);
     }
 } catch (Exception $e) {}
+
+$transferTypeOptions = getSiteTransferTypeOptions();
+$scheduleAudienceOptions = getSiteScheduleAudienceOptions();
+
+if (!$transferNumbers) {
+    $transferNumbers = [
+        ['number' => '', 'type' => 'wallet'],
+    ];
+}
+
+if (!$workSchedules) {
+    $workSchedules = [
+        ['label' => '', 'from' => '', 'to' => '', 'audience' => 'all'],
+    ];
+}
 
 $username  = $_SESSION['username'] ?? '';
 $role      = $_SESSION['role'] ?? '';
@@ -45,6 +66,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
     $newReceiptPaperWidthMm = trim((string)($_POST['receipt_paper_width_mm'] ?? ''));
     $newReceiptPageMarginMm = trim((string)($_POST['receipt_page_margin_mm'] ?? ''));
     $newReceiptFooterText = trim((string)($_POST['receipt_footer_text'] ?? 'الاشتراك لا يسترد'));
+    $postedTransferNumbers = $_POST['transfer_number'] ?? [];
+    $postedTransferTypes = $_POST['transfer_type'] ?? [];
+    $postedScheduleLabels = $_POST['schedule_label'] ?? [];
+    $postedScheduleFrom = $_POST['schedule_from'] ?? [];
+    $postedScheduleTo = $_POST['schedule_to'] ?? [];
+    $postedScheduleAudiences = $_POST['schedule_audience'] ?? [];
 
     if ($newSiteName === '') {
         $errors[] = "من فضلك أدخل اسم الموقع.";
@@ -63,6 +90,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
     if ($newReceiptFooterText === '') {
         $newReceiptFooterText = 'الاشتراك لا يسترد';
     }
+
+    $newTransferNumbers = [];
+    $postedTransferEntries = [];
+    $transferRowsCount = max(
+        is_array($postedTransferNumbers) ? count($postedTransferNumbers) : 0,
+        is_array($postedTransferTypes) ? count($postedTransferTypes) : 0
+    );
+    for ($i = 0; $i < $transferRowsCount; $i++) {
+        $transferNumber = trim((string)($postedTransferNumbers[$i] ?? ''));
+        $transferType = trim((string)($postedTransferTypes[$i] ?? 'wallet'));
+        if (!isset($transferTypeOptions[$transferType])) {
+            $transferType = 'wallet';
+        }
+        $postedTransferEntries[] = [
+            'number' => $transferNumber,
+            'type' => $transferType,
+        ];
+        if ($transferNumber === '') {
+            continue;
+        }
+        $newTransferNumbers[] = [
+            'number' => $transferNumber,
+            'type' => $transferType,
+        ];
+    }
+
+    $newWorkSchedules = [];
+    $postedWorkScheduleEntries = [];
+    $scheduleRowsCount = max(
+        is_array($postedScheduleLabels) ? count($postedScheduleLabels) : 0,
+        is_array($postedScheduleFrom) ? count($postedScheduleFrom) : 0,
+        is_array($postedScheduleTo) ? count($postedScheduleTo) : 0,
+        is_array($postedScheduleAudiences) ? count($postedScheduleAudiences) : 0
+    );
+    for ($i = 0; $i < $scheduleRowsCount; $i++) {
+        $scheduleLabel = trim((string)($postedScheduleLabels[$i] ?? ''));
+        $scheduleFrom = trim((string)($postedScheduleFrom[$i] ?? ''));
+        $scheduleTo = trim((string)($postedScheduleTo[$i] ?? ''));
+        $scheduleAudience = trim((string)($postedScheduleAudiences[$i] ?? 'all'));
+        if (!isset($scheduleAudienceOptions[$scheduleAudience])) {
+            $scheduleAudience = 'all';
+        }
+        $postedWorkScheduleEntries[] = [
+            'label' => $scheduleLabel,
+            'from' => $scheduleFrom,
+            'to' => $scheduleTo,
+            'audience' => $scheduleAudience,
+        ];
+        if ($scheduleLabel === '' && $scheduleFrom === '' && $scheduleTo === '') {
+            continue;
+        }
+        if ($scheduleFrom === '' || $scheduleTo === '') {
+            $errors[] = "كل موعد عمل يجب أن يحتوي على وقت بداية ووقت نهاية.";
+            continue;
+        }
+        if (!preg_match('/^\d{2}:\d{2}$/', $scheduleFrom) || !preg_match('/^\d{2}:\d{2}$/', $scheduleTo)) {
+            $errors[] = "صيغة مواعيد العمل غير صحيحة.";
+            continue;
+        }
+        $scheduleFromTimestamp = strtotime(SITE_SETTINGS_TIME_REFERENCE_DATE . ' ' . $scheduleFrom);
+        $scheduleToTimestamp = strtotime(SITE_SETTINGS_TIME_REFERENCE_DATE . ' ' . $scheduleTo);
+        if ($scheduleFromTimestamp === false || $scheduleToTimestamp === false || $scheduleFromTimestamp >= $scheduleToTimestamp) {
+            $errors[] = "وقت بداية الموعد يجب أن يكون قبل وقت النهاية.";
+            continue;
+        }
+        if ($scheduleLabel === '') {
+            $scheduleLabel = "من {$scheduleFrom} إلى {$scheduleTo}";
+        }
+        $newWorkSchedules[] = [
+            'label' => $scheduleLabel,
+            'from' => $scheduleFrom,
+            'to' => $scheduleTo,
+            'audience' => $scheduleAudience,
+        ];
+    }
+
+    if (!$newTransferNumbers) {
+        $newTransferNumbers = [
+            ['number' => '', 'type' => 'wallet'],
+        ];
+    }
+    if (!$postedTransferEntries) {
+        $postedTransferEntries = [
+            ['number' => '', 'type' => 'wallet'],
+        ];
+    }
+
+    if (!$newWorkSchedules) {
+        $newWorkSchedules = [
+            ['label' => '', 'from' => '', 'to' => '', 'audience' => 'all'],
+        ];
+    }
+    if (!$postedWorkScheduleEntries) {
+        $postedWorkScheduleEntries = [
+            ['label' => '', 'from' => '', 'to' => '', 'audience' => 'all'],
+        ];
+    }
+
+    $transferNumbers = $postedTransferEntries;
+    $workSchedules = $postedWorkScheduleEntries;
 
     // معالجة الشعار
     $newLogoPath = $logoPath; // القيمة القديمة افتراضيًا
@@ -110,7 +237,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                         logo_path = :p,
                         receipt_paper_width_mm = :receipt_width,
                         receipt_page_margin_mm = :receipt_margin,
-                        receipt_footer_text = :receipt_footer
+                        receipt_footer_text = :receipt_footer,
+                        transfer_numbers_json = :transfer_numbers_json,
+                        work_schedules_json = :work_schedules_json
                     WHERE id = :id
                 ");
                 $update->execute([
@@ -119,6 +248,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                     ':receipt_width' => (int)$receiptPaperWidthValue,
                     ':receipt_margin' => (int)$receiptPageMarginValue,
                     ':receipt_footer' => $newReceiptFooterText,
+                    ':transfer_numbers_json' => json_encode($newTransferNumbers, JSON_UNESCAPED_UNICODE),
+                    ':work_schedules_json' => json_encode($newWorkSchedules, JSON_UNESCAPED_UNICODE),
                     ':id' => $settingsId,
                 ]);
             } else {
@@ -128,8 +259,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                         logo_path,
                         receipt_paper_width_mm,
                         receipt_page_margin_mm,
-                        receipt_footer_text
-                    ) VALUES (:n, :p, :receipt_width, :receipt_margin, :receipt_footer)
+                        receipt_footer_text,
+                        transfer_numbers_json,
+                        work_schedules_json
+                    ) VALUES (:n, :p, :receipt_width, :receipt_margin, :receipt_footer, :transfer_numbers_json, :work_schedules_json)
                 ");
                 $insert->execute([
                     ':n' => $newSiteName,
@@ -137,6 +270,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                     ':receipt_width' => (int)$receiptPaperWidthValue,
                     ':receipt_margin' => (int)$receiptPageMarginValue,
                     ':receipt_footer' => $newReceiptFooterText,
+                    ':transfer_numbers_json' => json_encode($newTransferNumbers, JSON_UNESCAPED_UNICODE),
+                    ':work_schedules_json' => json_encode($newWorkSchedules, JSON_UNESCAPED_UNICODE),
                 ]);
             }
 
@@ -145,6 +280,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
             $receiptPaperWidthMm = (string)(int)$receiptPaperWidthValue;
             $receiptPageMarginMm = (string)(int)$receiptPageMarginValue;
             $receiptFooterText = $newReceiptFooterText;
+            $transferNumbers = $newTransferNumbers;
+            $workSchedules = $newWorkSchedules;
             $success  = "تم حفظ إعدادات الموقع بنجاح.";
         } catch (Exception $e) {
             $errors[] = "حدث خطأ أثناء حفظ الإعدادات.";
@@ -324,6 +461,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
 
         input[type="text"],
         input[type="number"],
+        input[type="time"],
+        select,
         textarea {
             width: 100%;
             padding: 13px 14px;
@@ -350,6 +489,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
 
         input[type="text"]:focus,
         input[type="number"]:focus,
+        input[type="time"]:focus,
+        select:focus,
         textarea:focus {
             outline: none;
             border-color: var(--primary);
@@ -415,6 +556,77 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         }
         .btn-save-main:hover { filter: brightness(1.05); }
 
+        .btn-small {
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 900;
+            padding: 10px 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: linear-gradient(90deg, #2563eb, #38bdf8);
+            color: #f9fafb;
+            box-shadow: 0 14px 30px rgba(37,99,235,0.35);
+        }
+        .btn-small.btn-danger {
+            background: linear-gradient(90deg, #dc2626, #ef4444);
+            box-shadow: 0 14px 30px rgba(220,38,38,0.28);
+        }
+
+        .settings-block {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            background: rgba(37,99,235,0.04);
+        }
+        body.dark .settings-block {
+            background: rgba(15,23,42,0.72);
+        }
+        .settings-block-title {
+            font-size: 18px;
+            font-weight: 900;
+            margin-bottom: 6px;
+        }
+        .settings-block-subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+            font-weight: 700;
+            margin-bottom: 14px;
+            line-height: 1.8;
+        }
+        .repeater-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .repeater-item {
+            border: 1px dashed var(--border);
+            border-radius: 18px;
+            padding: 12px;
+            background: rgba(255,255,255,0.78);
+        }
+        body.dark .repeater-item {
+            background: rgba(2,6,23,0.82);
+        }
+        .repeater-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            align-items: end;
+        }
+        .repeater-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
         .alert {
             padding: 11px 13px;
             border-radius: 12px;
@@ -454,7 +666,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
     <div class="header-bar">
         <div>
             <div class="title-main">إعدادات الموقع</div>
-            <div class="title-sub">تغيير اسم النظام والشعار الذي يظهر في صفحة الدخول ولوحة التحكم.</div>
+            <div class="title-sub">تغيير اسم النظام والشعار وبيانات التحويل ومواعيد العمل الظاهرة للمشتركين.</div>
         </div>
         <div>
             <a href="dashboard.php" class="back-button">
@@ -528,9 +740,111 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                     </div>
 
                     <div class="field">
-                        <label for="receipt_footer_text">الجملة الظاهرة أسفل الفاتورة</label>
+                        <label for="receipt_footer_text">الجملة المعروضة أسفل الفاتورة</label>
                         <textarea id="receipt_footer_text" name="receipt_footer_text" <?php echo !$isManager ? 'disabled' : ''; ?>><?php echo htmlspecialchars($receiptFooterText); ?></textarea>
                         <div class="muted">سيتم إظهار هذه الجملة في نهاية فاتورة المبيعات، مثل: الاشتراك لا يسترد.</div>
+                    </div>
+
+                    <div class="settings-block">
+                        <div class="settings-block-title">أرقام التحويل</div>
+                        <div class="settings-block-subtitle">أضف أرقام التحويل وحدد هل كل رقم محفظة إلكترونية أو انستا باي، وسيتم عرضها أسفل صفحة استعلام المشترك.</div>
+                        <div class="repeater-list" id="transferNumbersList">
+                            <?php foreach ($transferNumbers as $transferEntry): ?>
+                                <?php
+                                $transferNumberValue = trim((string)($transferEntry['number'] ?? ''));
+                                $transferTypeValue = trim((string)($transferEntry['type'] ?? 'wallet'));
+                                if (!isset($transferTypeOptions[$transferTypeValue])) {
+                                    $transferTypeValue = 'wallet';
+                                }
+                                ?>
+                                <div class="repeater-item">
+                                    <div class="repeater-grid">
+                                        <div class="field">
+                                            <label>رقم التحويل</label>
+                                            <input type="text" name="transfer_number[]" value="<?php echo htmlspecialchars($transferNumberValue); ?>" <?php echo !$isManager ? 'disabled' : ''; ?>>
+                                        </div>
+                                        <div class="field">
+                                            <label>نوع الرقم</label>
+                                            <select name="transfer_type[]" <?php echo !$isManager ? 'disabled' : ''; ?>>
+                                                <?php foreach ($transferTypeOptions as $transferTypeKey => $transferTypeLabel): ?>
+                                                    <option value="<?php echo htmlspecialchars($transferTypeKey); ?>" <?php echo $transferTypeValue === $transferTypeKey ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($transferTypeLabel); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <?php if ($isManager): ?>
+                                        <div class="repeater-actions">
+                                            <span class="muted">يمكنك إضافة أكثر من رقم تحويل حسب الحاجة.</span>
+                                            <button type="button" class="btn-small btn-danger js-remove-repeater">حذف</button>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php if ($isManager): ?>
+                            <div class="repeater-actions">
+                                <span class="muted">أضف صفاً جديداً لإضافة رقم تحويل آخر.</span>
+                                <button type="button" class="btn-small" id="addTransferRow">+ إضافة رقم تحويل</button>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="settings-block">
+                        <div class="settings-block-title">مواعيد العمل</div>
+                        <div class="settings-block-subtitle">اكتب اسم الموعد أو اليوم، وحدد وقت البداية والنهاية، ثم اختر هل الموعد للرجال فقط أو السيدات فقط أو للجميع.</div>
+                        <div class="repeater-list" id="workSchedulesList">
+                            <?php foreach ($workSchedules as $scheduleEntry): ?>
+                                <?php
+                                $scheduleLabelValue = trim((string)($scheduleEntry['label'] ?? ''));
+                                $scheduleFromValue = trim((string)($scheduleEntry['from'] ?? ''));
+                                $scheduleToValue = trim((string)($scheduleEntry['to'] ?? ''));
+                                $scheduleAudienceValue = trim((string)($scheduleEntry['audience'] ?? 'all'));
+                                if (!isset($scheduleAudienceOptions[$scheduleAudienceValue])) {
+                                    $scheduleAudienceValue = 'all';
+                                }
+                                ?>
+                                <div class="repeater-item">
+                                    <div class="repeater-grid">
+                                        <div class="field">
+                                            <label>اسم الموعد / اليوم</label>
+                                            <input type="text" name="schedule_label[]" value="<?php echo htmlspecialchars($scheduleLabelValue); ?>" placeholder="مثال: الجمعة أو الفترة الصباحية" <?php echo !$isManager ? 'disabled' : ''; ?>>
+                                        </div>
+                                        <div class="field">
+                                            <label>من</label>
+                                            <input type="time" name="schedule_from[]" value="<?php echo htmlspecialchars($scheduleFromValue); ?>" <?php echo !$isManager ? 'disabled' : ''; ?>>
+                                        </div>
+                                        <div class="field">
+                                            <label>إلى</label>
+                                            <input type="time" name="schedule_to[]" value="<?php echo htmlspecialchars($scheduleToValue); ?>" <?php echo !$isManager ? 'disabled' : ''; ?>>
+                                        </div>
+                                        <div class="field">
+                                            <label>الفئة</label>
+                                            <select name="schedule_audience[]" <?php echo !$isManager ? 'disabled' : ''; ?>>
+                                                <?php foreach ($scheduleAudienceOptions as $audienceKey => $audienceLabel): ?>
+                                                    <option value="<?php echo htmlspecialchars($audienceKey); ?>" <?php echo $scheduleAudienceValue === $audienceKey ? 'selected' : ''; ?>>
+                                                        <?php echo htmlspecialchars($audienceLabel); ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <?php if ($isManager): ?>
+                                        <div class="repeater-actions">
+                                            <span class="muted">اكتب الوصف كما تريد أن يظهر في صفحة المشترك.</span>
+                                            <button type="button" class="btn-small btn-danger js-remove-repeater">حذف</button>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php if ($isManager): ?>
+                            <div class="repeater-actions">
+                                <span class="muted">أضف أكثر من موعد عمل عند الحاجة.</span>
+                                <button type="button" class="btn-small" id="addScheduleRow">+ إضافة موعد عمل</button>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <?php if ($isManager): ?>
@@ -563,6 +877,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         </form>
     </div>
 </div>
+
+<?php if ($isManager): ?>
+    <template id="transferRowTemplate">
+        <div class="repeater-item">
+            <div class="repeater-grid">
+                <div class="field">
+                    <label>رقم التحويل</label>
+                    <input type="text" name="transfer_number[]">
+                </div>
+                <div class="field">
+                    <label>نوع الرقم</label>
+                    <select name="transfer_type[]">
+                        <?php foreach ($transferTypeOptions as $transferTypeKey => $transferTypeLabel): ?>
+                            <option value="<?php echo htmlspecialchars($transferTypeKey); ?>">
+                                <?php echo htmlspecialchars($transferTypeLabel); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="repeater-actions">
+                <span class="muted">يمكنك إضافة أكثر من رقم تحويل حسب الحاجة.</span>
+                <button type="button" class="btn-small btn-danger js-remove-repeater">حذف</button>
+            </div>
+        </div>
+    </template>
+
+    <template id="scheduleRowTemplate">
+        <div class="repeater-item">
+            <div class="repeater-grid">
+                <div class="field">
+                    <label>اسم الموعد / اليوم</label>
+                    <input type="text" name="schedule_label[]" placeholder="مثال: الجمعة أو الفترة الصباحية">
+                </div>
+                <div class="field">
+                    <label>من</label>
+                    <input type="time" name="schedule_from[]">
+                </div>
+                <div class="field">
+                    <label>إلى</label>
+                    <input type="time" name="schedule_to[]">
+                </div>
+                <div class="field">
+                    <label>الفئة</label>
+                    <select name="schedule_audience[]">
+                        <?php foreach ($scheduleAudienceOptions as $audienceKey => $audienceLabel): ?>
+                            <option value="<?php echo htmlspecialchars($audienceKey); ?>">
+                                <?php echo htmlspecialchars($audienceLabel); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="repeater-actions">
+                <span class="muted">اكتب الوصف كما تريد أن يظهر في صفحة المشترك.</span>
+                <button type="button" class="btn-small btn-danger js-remove-repeater">حذف</button>
+            </div>
+        </div>
+    </template>
+<?php endif; ?>
 
 <script>
     // ثيم داكن/فاتح مثل لوحة التحكم
@@ -616,6 +990,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
+        });
+    }
+
+    const transferNumbersList = document.getElementById('transferNumbersList');
+    const workSchedulesList = document.getElementById('workSchedulesList');
+    const transferRowTemplate = document.getElementById('transferRowTemplate');
+    const scheduleRowTemplate = document.getElementById('scheduleRowTemplate');
+    const addTransferRowButton = document.getElementById('addTransferRow');
+    const addScheduleRowButton = document.getElementById('addScheduleRow');
+
+    function bindRepeaterRemoveButtons(scope) {
+        if (!scope) return;
+        const buttons = scope.querySelectorAll('.js-remove-repeater');
+        buttons.forEach((button) => {
+            if (button.dataset.bound === '1') return;
+            button.dataset.bound = '1';
+            button.addEventListener('click', function () {
+                const item = this.closest('.repeater-item');
+                const parent = item ? item.parentElement : null;
+                if (!item || !parent || parent.children.length <= 1) {
+                    return;
+                }
+                item.remove();
+            });
+        });
+    }
+
+    bindRepeaterRemoveButtons(document);
+
+    if (addTransferRowButton && transferNumbersList && transferRowTemplate) {
+        addTransferRowButton.addEventListener('click', function () {
+            const fragment = transferRowTemplate.content.cloneNode(true);
+            bindRepeaterRemoveButtons(fragment);
+            transferNumbersList.appendChild(fragment);
+        });
+    }
+
+    if (addScheduleRowButton && workSchedulesList && scheduleRowTemplate) {
+        addScheduleRowButton.addEventListener('click', function () {
+            const fragment = scheduleRowTemplate.content.cloneNode(true);
+            bindRepeaterRemoveButtons(fragment);
+            workSchedulesList.appendChild(fragment);
         });
     }
 </script>

@@ -3,16 +3,25 @@ session_start();
 require_once 'config.php';
 require_once 'member_portal_nutrition_helpers.php';
 require_once 'member_notifications_helpers.php';
+require_once 'site_settings_helpers.php';
+
+ensureExtendedSiteSettingsSchema($pdo);
 
 // جلب اسم الجيم واللوجو من site_settings
 $siteName = "Gym System";
 $logoPath = null;
+$transferNumbers = [];
+$workSchedules = [];
+$transferTypeOptions = getSiteTransferTypeOptions();
+$scheduleAudienceOptions = getSiteScheduleAudienceOptions();
 
 try {
-    $stmt = $pdo->query("SELECT site_name, logo_path FROM site_settings ORDER BY id ASC LIMIT 1");
+    $stmt = $pdo->query("SELECT site_name, logo_path, transfer_numbers_json, work_schedules_json FROM site_settings ORDER BY id ASC LIMIT 1");
     if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $siteName = $row['site_name'];
         $logoPath = $row['logo_path'];
+        $transferNumbers = decodeSiteSettingsJsonList($row['transfer_numbers_json'] ?? null);
+        $workSchedules = decodeSiteSettingsJsonList($row['work_schedules_json'] ?? null);
     }
 } catch (Exception $e) {}
 
@@ -576,6 +585,58 @@ function barcodeImgUrl($text) {
             margin-top:4px;
         }
 
+        .portal-footer-info {
+            margin-top: 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+        }
+        .portal-footer-card {
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 14px;
+            background: rgba(255,255,255,0.8);
+        }
+        body.dark .portal-footer-card {
+            background: rgba(2,6,23,0.8);
+        }
+        .portal-footer-title {
+            font-size: 16px;
+            font-weight: 900;
+            margin-bottom: 10px;
+        }
+        .portal-footer-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .portal-footer-item {
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 10px;
+            background: rgba(34,197,94,0.06);
+        }
+        body.dark .portal-footer-item {
+            background: rgba(15,23,42,0.75);
+        }
+        .portal-footer-item strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+        .portal-footer-item span {
+            display: block;
+            font-size: 13px;
+            line-height: 1.8;
+            font-weight: 700;
+        }
+        .portal-footer-empty {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 700;
+            line-height: 1.8;
+        }
+
         @media (max-width: 480px) {
             .card { padding:12px 10px 16px; }
             .gym-name { font-size:16px; }
@@ -836,8 +897,63 @@ function barcodeImgUrl($text) {
                         <div class="assistant-plan" id="captainMegzPlan"></div>
                     </div>
                 </div>
-            </div>
         <?php endif; ?>
+
+        <div class="portal-footer-info">
+            <div class="portal-footer-card">
+                <div class="portal-footer-title">أرقام التحويل المتاحة</div>
+                <?php
+                $hasTransferNumbers = false;
+                foreach ($transferNumbers as $transferEntry):
+                    $transferNumber = trim((string)($transferEntry['number'] ?? ''));
+                    if ($transferNumber === '') {
+                        continue;
+                    }
+                    $hasTransferNumbers = true;
+                    $transferType = trim((string)($transferEntry['type'] ?? 'wallet'));
+                    $transferTypeLabel = $transferTypeOptions[$transferType] ?? $transferTypeOptions['wallet'];
+                ?>
+                    <div class="portal-footer-item">
+                        <strong><?php echo htmlspecialchars($transferTypeLabel); ?></strong>
+                        <span><?php echo htmlspecialchars($transferNumber); ?></span>
+                    </div>
+                <?php endforeach; ?>
+
+                <?php if (!$hasTransferNumbers): ?>
+                    <div class="portal-footer-empty">لا توجد أرقام تحويل مضافة حالياً.</div>
+                <?php endif; ?>
+            </div>
+
+            <div class="portal-footer-card">
+                <div class="portal-footer-title">مواعيد العمل</div>
+                <?php
+                $hasWorkSchedules = false;
+                foreach ($workSchedules as $scheduleEntry):
+                    $scheduleFrom = trim((string)($scheduleEntry['from'] ?? ''));
+                    $scheduleTo = trim((string)($scheduleEntry['to'] ?? ''));
+                    if ($scheduleFrom === '' || $scheduleTo === '') {
+                        continue;
+                    }
+                    $hasWorkSchedules = true;
+                    $scheduleLabel = trim((string)($scheduleEntry['label'] ?? ''));
+                    if ($scheduleLabel === '') {
+                        $scheduleLabel = "من {$scheduleFrom} إلى {$scheduleTo}";
+                    }
+                    $scheduleAudience = trim((string)($scheduleEntry['audience'] ?? 'all'));
+                    $scheduleAudienceLabel = $scheduleAudienceOptions[$scheduleAudience] ?? $scheduleAudienceOptions['all'];
+                ?>
+                    <div class="portal-footer-item">
+                        <strong><?php echo htmlspecialchars($scheduleLabel); ?></strong>
+                        <span>الوقت: <?php echo htmlspecialchars($scheduleFrom . ' - ' . $scheduleTo); ?></span>
+                        <span>الفئة: <?php echo htmlspecialchars($scheduleAudienceLabel); ?></span>
+                    </div>
+                <?php endforeach; ?>
+
+                <?php if (!$hasWorkSchedules): ?>
+                    <div class="portal-footer-empty">لا توجد مواعيد عمل مضافة حالياً.</div>
+                <?php endif; ?>
+            </div>
+        </div>
     </div>
 </div>
 

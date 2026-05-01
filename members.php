@@ -44,24 +44,7 @@ ensureMembersPaymentTypeSchema($pdo);
 ensurePartialPaymentsPaymentTypeSchema($pdo);
 ensureRenewalsLogPaymentTypeSchema($pdo);
 
-define('MEMBER_BARCODE_START', 8221);
 define('MEMBERS_PAGE_SIZE', 100);
-
-function getNextMemberBarcode(PDO $pdo, int $startingBarcode = MEMBER_BARCODE_START): string
-{
-    $maxBarcode = $startingBarcode - 1;
-    $stmt = $pdo->query("
-        SELECT MAX(CAST(barcode AS UNSIGNED)) AS max_barcode
-        FROM members
-        WHERE barcode REGEXP '^[0-9]+$'
-    ");
-    $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
-    if ($row && isset($row['max_barcode']) && $row['max_barcode'] !== null) {
-        $maxBarcode = max($maxBarcode, (int)$row['max_barcode']);
-    }
-
-    return (string)($maxBarcode + 1);
-}
 
 $siteName = "Gym System";
 $gymLogoPath = null; // سنستخدمه كصورة افتراضية للعميل إذا لم توجد صورة للعميل
@@ -637,7 +620,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManageMembers) {
             }
         }
 
-        if ($name === '' || $phone === '' || $age === false || !in_array($gender, ['ذكر','أنثى'], true)) {
+        if ($name === '' || $phone === '' || $barcode === '' || $age === false || !in_array($gender, ['ذكر','أنثى'], true)) {
             $errors[] = "من فضلك أدخل بيانات المشترك الأساسية بشكل صحيح.";
         } elseif ($subId <= 0) {
             $errors[] = "من فضلك اختر اشتراكاً صالحاً.";
@@ -650,15 +633,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManageMembers) {
         } elseif (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDateInput)) {
             $errors[] = "تنسيق تاريخ البداية غير صحيح.";
         } else {
-            // التحقق من عدم تكرار الباركود (إن وُجد) لمشترك آخر
-            if ($action === 'edit_member' && $barcode !== '') {
-                try {
-                    if (memberBarcodeExists($pdo, $barcode, $memberId)) {
-                        $errors[] = "لا يمكن تسجيل مشترك بنفس الباركود الموجود بالفعل.";
-                    }
-                } catch (Exception $e) {
-                    $errors[] = "حدث خطأ أثناء التحقق من الباركود.";
+            try {
+                if (memberBarcodeExists($pdo, $barcode, $action === 'edit_member' ? $memberId : null)) {
+                    $errors[] = "لا يمكن تسجيل مشترك بنفس الباركود الموجود بالفعل.";
                 }
+            } catch (Exception $e) {
+                $errors[] = "حدث خطأ أثناء التحقق من الباركود.";
             }
 
             if (empty($errors)) {
@@ -827,13 +807,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $canManageMembers) {
 
                             if (empty($errors)) {
                                 $pdo->beginTransaction();
-                                if ($action === 'add_member' || $barcode !== '') {
-                                    acquireMemberBarcodeLock($pdo);
-                                    $barcodeLockAcquired = true;
-                                }
-                                if ($action === 'add_member') {
-                                    $barcode = getNextMemberBarcode($pdo);
-                                } elseif (memberBarcodeExists($pdo, $barcode, $memberId)) {
+                                acquireMemberBarcodeLock($pdo);
+                                $barcodeLockAcquired = true;
+                                if (memberBarcodeExists($pdo, $barcode, $action === 'edit_member' ? $memberId : null)) {
                                     throw new RuntimeException("لا يمكن تسجيل مشترك بنفس الباركود الموجود بالفعل.");
                                 }
                                 $stmt->bindValue(':n',   $name);
@@ -1227,12 +1203,6 @@ $paginationBaseParams = [
     'status_filter' => $statusFilter,
     'debts_filter' => $debtsFilter,
 ];
-
-try {
-    $nextMemberBarcodePreview = getNextMemberBarcode($pdo);
-} catch (Exception $e) {
-    $nextMemberBarcodePreview = (string) MEMBER_BARCODE_START;
-}
 
 ?>
 <!DOCTYPE html>
@@ -1929,7 +1899,8 @@ try {
 
                 <div class="field">
                     <label for="m_barcode">باركود المشترك</label>
-                    <input type="text" id="m_barcode" name="barcode" value="<?php echo htmlspecialchars($nextMemberBarcodePreview, ENT_QUOTES); ?>" readonly>
+                    <input type="text" id="m_barcode" name="barcode" value="" required pattern=".*\S.*" title="من فضلك اكتب باركود المشترك، ولا تتركه فارغاً أو مكوّناً من مسافات فقط.">
+                    <div class="muted">اكتب الباركود يدوياً لكل مشترك، ويجب أن يكون غير مكرر.</div>
                 </div>
 
                 <div class="field">
@@ -2278,8 +2249,8 @@ try {
         modalSaveText.textContent = 'حفظ المشترك';
         form.reset();
         if (barcodeInput) {
-            barcodeInput.value = '<?php echo htmlspecialchars($nextMemberBarcodePreview, ENT_QUOTES); ?>';
-            barcodeInput.readOnly = true;
+            barcodeInput.value = '';
+            barcodeInput.readOnly = false;
         }
         if (categorySelect) categorySelect.value = '';
         daysInput.value   = '';
