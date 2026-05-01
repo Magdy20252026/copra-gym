@@ -762,6 +762,15 @@ if ($role === 'مشرف' && $userId) {
                     </button>
                 <?php endif; ?>
 
+                <?php if ($role === 'مدير'): ?>
+                    <button class="menu-button" type="button" onclick="location.href='member_notifications.php'">
+                        <div class="menu-left">
+                            <div class="menu-icon" style="background:rgba(234,88,12,0.95);">🔔</div>
+                            <div class="menu-label">إشعارات المشتركين</div>
+                        </div>
+                    </button>
+                <?php endif; ?>
+
 
                 <?php if ($role === 'مدير' || $perms['can_view_trainers']): ?>
                     <button class="menu-button" type="button" onclick="location.href='trainers.php'">

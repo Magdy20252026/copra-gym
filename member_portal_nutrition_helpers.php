@@ -123,6 +123,7 @@ function memberPortalFindMemberData(PDO $pdo, string $phoneInput, ?string $logoP
     }
 
     return [
+        'id' => (int)$member['id'],
         'name' => $member['name'],
         'phone' => $member['phone'],
         'barcode' => $member['barcode'],

@@ -2,6 +2,7 @@
 session_start();
 require_once 'config.php';
 require_once 'member_portal_nutrition_helpers.php';
+require_once 'member_notifications_helpers.php';
 
 // جلب اسم الجيم واللوجو من site_settings
 $siteName = "Gym System";
@@ -18,6 +19,7 @@ try {
 // معالجة البحث برقم الهاتف
 $phoneInput = trim($_GET['phone'] ?? '');
 $memberData = null;
+$memberNotifications = [];
 $errorMsg   = '';
 
 if ($phoneInput !== '') {
@@ -26,6 +28,9 @@ if ($phoneInput !== '') {
 
         if (!$memberData) {
             $errorMsg = 'لا يوجد مشترك بهذا رقم الهاتف.';
+        } else {
+            syncMemberSubscriptionNotifications($pdo, (int)$memberData['id']);
+            $memberNotifications = getMemberPortalNotifications($pdo, (int)$memberData['id']);
         }
     } catch (Exception $e) {
         $errorMsg = 'حدث خطأ أثناء جلب بيانات المشترك.';
@@ -126,6 +131,12 @@ function barcodeImgUrl($text) {
             display:flex;
             justify-content:flex-end;
             flex-shrink:0;
+        }
+        .header-actions {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            flex-wrap:wrap;
         }
         .theme-switch {
             position:relative;
@@ -296,6 +307,96 @@ function barcodeImgUrl($text) {
         .status-frozen {
             background:rgba(59,130,246,0.18);
             color:#1d4ed8;
+        }
+
+        .notifications-wrap {
+            position:relative;
+        }
+        .notifications-bell {
+            border:none;
+            border-radius:999px;
+            background:linear-gradient(90deg,#f59e0b,#ea580c);
+            color:#fff;
+            cursor:pointer;
+            font-size:18px;
+            font-weight:900;
+            min-width:52px;
+            height:44px;
+            padding:0 14px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:8px;
+            box-shadow:0 10px 24px rgba(234,88,12,0.35);
+        }
+        .notifications-count {
+            min-width:22px;
+            height:22px;
+            border-radius:999px;
+            background:rgba(255,255,255,0.25);
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            font-size:12px;
+            padding:0 6px;
+        }
+        .notifications-panel {
+            display:none;
+            margin-top:10px;
+            border:1px solid var(--border);
+            border-radius:16px;
+            padding:12px;
+            background:rgba(255,255,255,0.88);
+        }
+        body.dark .notifications-panel {
+            background:rgba(2,6,23,0.84);
+        }
+        .notifications-panel.is-open {
+            display:block;
+        }
+        .notifications-title {
+            font-size:15px;
+            font-weight:900;
+            margin-bottom:10px;
+        }
+        .notifications-list {
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+        }
+        .notification-item {
+            border:1px solid var(--border);
+            border-radius:12px;
+            padding:10px;
+            background:rgba(34,197,94,0.05);
+        }
+        body.dark .notification-item {
+            background:rgba(15,23,42,0.75);
+        }
+        .notification-item--manual {
+            border-right:4px solid #2563eb;
+        }
+        .notification-item--expiring_soon {
+            border-right:4px solid #f59e0b;
+        }
+        .notification-item--expired {
+            border-right:4px solid #ef4444;
+        }
+        .notification-item-title {
+            font-size:14px;
+            font-weight:900;
+            margin-bottom:4px;
+        }
+        .notification-item-message {
+            font-size:13px;
+            line-height:1.8;
+            font-weight:700;
+        }
+        .notification-item-time {
+            margin-top:6px;
+            font-size:12px;
+            color:var(--text-muted);
+            font-weight:700;
         }
 
         .grid {
@@ -504,11 +605,21 @@ function barcodeImgUrl($text) {
                     <div class="gym-subtitle">استعلام حالة الاشتراك للمشتركين</div>
                 </div>
             </div>
-            <div class="theme-toggle">
-                <div class="theme-switch" id="themeSwitch">
-                    <span>🌙</span>
-                    <span>☀️</span>
-                    <div class="theme-thumb" id="themeThumb">☀️</div>
+            <div class="header-actions">
+                <?php if ($memberData): ?>
+                    <div class="notifications-wrap">
+                        <button type="button" class="notifications-bell" id="notificationsBell">
+                            <span>🔔</span>
+                            <span class="notifications-count"><?php echo count($memberNotifications); ?></span>
+                        </button>
+                    </div>
+                <?php endif; ?>
+                <div class="theme-toggle">
+                    <div class="theme-switch" id="themeSwitch">
+                        <span>🌙</span>
+                        <span>☀️</span>
+                        <div class="theme-thumb" id="themeThumb">☀️</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -531,10 +642,29 @@ function barcodeImgUrl($text) {
         <?php endif; ?>
 
         <?php if ($memberData): ?>
-            <div class="member-card">
-                <div class="member-header">
-                    <div class="member-photo-wrap">
-                        <?php if (!empty($memberData['display_photo'])): ?>
+                <div class="member-card">
+                    <div class="notifications-panel" id="notificationsPanel">
+                        <div class="notifications-title">إشعاراتك الحالية</div>
+                        <?php if ($memberNotifications): ?>
+                            <div class="notifications-list">
+                                <?php foreach ($memberNotifications as $notification): ?>
+                                    <div class="notification-item notification-item--<?php echo htmlspecialchars($notification['notification_type']); ?>">
+                                        <div class="notification-item-title"><?php echo htmlspecialchars($notification['title']); ?></div>
+                                        <div class="notification-item-message"><?php echo htmlspecialchars($notification['message']); ?></div>
+                                        <div class="notification-item-time"><?php echo htmlspecialchars($notification['created_at']); ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="notification-item">
+                                <div class="notification-item-message">لا توجد إشعارات حالياً.</div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="member-header">
+                        <div class="member-photo-wrap">
+                            <?php if (!empty($memberData['display_photo'])): ?>
                             <img class="member-photo" src="<?php echo htmlspecialchars($memberData['display_photo']); ?>" alt="صورة المشترك">
                         <?php else: ?>
                             <div class="member-photo" style="display:flex;align-items:center;justify-content:center;font-size:42px;">
@@ -728,6 +858,14 @@ function barcodeImgUrl($text) {
         switchEl.addEventListener('click', () => {
             const isDark = body.classList.contains('dark');
             applyTheme(isDark ? 'light' : 'dark');
+        });
+    }
+
+    const notificationsBell = document.getElementById('notificationsBell');
+    const notificationsPanel = document.getElementById('notificationsPanel');
+    if (notificationsBell && notificationsPanel) {
+        notificationsBell.addEventListener('click', () => {
+            notificationsPanel.classList.toggle('is-open');
         });
     }
 
