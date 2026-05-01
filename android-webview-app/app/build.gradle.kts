@@ -14,7 +14,10 @@ val generateLauncherPngResources by tasks.registering {
 
     doLast {
         val sourceImage = ImageIO.read(launcherSourcePng.asFile)
-            ?: error("Unable to read launcher PNG: ${launcherSourcePng.asFile}")
+            ?: error(
+                "Unable to read launcher PNG at ${launcherSourcePng.asFile}. " +
+                    "Make sure the file exists and is a valid PNG image."
+            )
         val outputRoot = generatedLauncherResDir.get().asFile
         val densities = mapOf(
             "mipmap-mdpi" to 48,
@@ -23,8 +26,6 @@ val generateLauncherPngResources by tasks.registering {
             "mipmap-xxhdpi" to 144,
             "mipmap-xxxhdpi" to 192
         )
-
-        outputRoot.deleteRecursively()
 
         densities.forEach { (directoryName, iconSize) ->
             val scaledImage = BufferedImage(iconSize, iconSize, BufferedImage.TYPE_INT_ARGB)
