@@ -235,14 +235,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
             if ($file['size'] > $maxSize) {
                 $errors[] = "حجم ملف الشعار يجب ألا يزيد عن 2 ميجابايت.";
             } else {
-                $detectedMimeType = detectUploadedImageMimeType($file['tmp_name'] ?? '');
+                $tmpFilePath = trim((string)($file['tmp_name'] ?? ''));
+                $detectedMimeType = $tmpFilePath !== '' ? detectUploadedImageMimeType($tmpFilePath) : null;
                 if ($detectedMimeType === null || !isset($allowedMimeTypes[$detectedMimeType])) {
                     $errors[] = "نوع ملف الشعار غير مسموح (يُسمح بـ JPG/PNG/WebP/GIF).";
                 } else {
                     // مجلد الرفع (تأكد من وجوده وصلاحياته)
                     $uploadDir  = 'uploads/';
                     if (!is_dir($uploadDir)) {
-                        @mkdir($uploadDir, 0777, true);
+                        @mkdir($uploadDir, 0755, true);
                     }
 
                     $ext = $allowedMimeTypes[$detectedMimeType];
