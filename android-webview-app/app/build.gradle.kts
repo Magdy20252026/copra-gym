@@ -1,6 +1,22 @@
 apply(plugin = "com.android.application")
 apply(plugin = "org.jetbrains.kotlin.android")
 
+val launcherSourcePng = layout.projectDirectory.file("src/main/res/drawable-nodpi/app_logo.png")
+val generatedLauncherResDir = layout.buildDirectory.dir("generated/res/customLauncher")
+
+val generateLauncherPngResources by tasks.registering {
+    inputs.file(launcherSourcePng)
+    outputs.dir(generatedLauncherResDir)
+
+    doLast {
+        val mipmapDir = generatedLauncherResDir.get().asFile.resolve("mipmap")
+        mipmapDir.mkdirs()
+
+        launcherSourcePng.asFile.copyTo(mipmapDir.resolve("ic_launcher.png"), overwrite = true)
+        launcherSourcePng.asFile.copyTo(mipmapDir.resolve("ic_launcher_round.png"), overwrite = true)
+    }
+}
+
 android {
     namespace = "com.copragym.mobile"
     compileSdk = 34
@@ -38,6 +54,12 @@ android {
         viewBinding = true
         buildConfig = true
     }
+
+    sourceSets.getByName("main").res.srcDir(generatedLauncherResDir)
+}
+
+tasks.named("preBuild") {
+    dependsOn(generateLauncherPngResources)
 }
 
 dependencies {
