@@ -199,11 +199,13 @@ function syncMemberSubscriptionNotifications(PDO $pdo, int $memberId): void
     if ($endDate >= $today) {
         $daysLeft = (int)$today->diff($endDate)->days;
         if ($daysLeft <= 5) {
-            $daysText = $daysLeft === 0 ? 'اليوم' : ('بعد ' . $daysLeft . ' يوم');
-            if ($daysLeft > 2 && $daysLeft <= 10) {
+            $daysText = 'اليوم';
+            if ($daysLeft === 1) {
+                $daysText = 'بعد يوم واحد';
+            } elseif ($daysLeft === 2) {
+                $daysText = 'بعد يومين';
+            } elseif ($daysLeft >= 3) {
                 $daysText = 'بعد ' . $daysLeft . ' أيام';
-            } elseif ($daysLeft > 10) {
-                $daysText = 'بعد ' . $daysLeft . ' يوماً';
             }
 
             createMemberSpecificNotification(
