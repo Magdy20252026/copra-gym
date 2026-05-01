@@ -223,8 +223,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         $file      = $_FILES['logo'];
         $allowedMimeTypes = [
             'image/jpeg' => 'jpg',
-            'image/pjpeg' => 'jpg',
             'image/png' => 'png',
+            // بعض المتصفحات أو الخوادم القديمة قد ترسل PNG بهذه الصيغة غير القياسية.
             'image/x-png' => 'png',
             'image/webp' => 'webp',
             'image/gif' => 'gif',
@@ -232,12 +232,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         $maxSize   = 2 * 1024 * 1024; // 2MB
 
         if ($file['error'] === UPLOAD_ERR_OK) {
-            $detectedMimeType = detectUploadedImageMimeType($file['tmp_name'] ?? '');
             if ($file['size'] > $maxSize) {
                 $errors[] = "حجم ملف الشعار يجب ألا يزيد عن 2 ميجابايت.";
-            } elseif ($detectedMimeType === null || !isset($allowedMimeTypes[$detectedMimeType])) {
-                $errors[] = "نوع ملف الشعار غير مسموح (يُسمح بـ JPG/PNG/WebP/GIF).";
             } else {
+                $detectedMimeType = detectUploadedImageMimeType($file['tmp_name'] ?? '');
+            }
+
+            if ($file['size'] <= $maxSize && ($detectedMimeType === null || !isset($allowedMimeTypes[$detectedMimeType]))) {
+                $errors[] = "نوع ملف الشعار غير مسموح (يُسمح بـ JPG/PNG/WebP/GIF).";
+            } elseif ($file['size'] <= $maxSize) {
                 // مجلد الرفع (تأكد من وجوده وصلاحياته)
                 $uploadDir  = 'uploads/';
                 if (!is_dir($uploadDir)) {
