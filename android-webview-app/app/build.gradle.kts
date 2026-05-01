@@ -88,10 +88,11 @@ android {
     sourceSets {
         getByName("main").res.srcDir(generatedLauncherResDir)
     }
-}
-
-tasks.named("preBuild") {
-    dependsOn(generateLauncherPngResources)
+    applicationVariants.all {
+        mergeResourcesProvider.configure {
+            dependsOn(generateLauncherPngResources)
+        }
+    }
 }
 
 dependencies {
