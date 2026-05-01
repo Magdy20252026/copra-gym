@@ -15,6 +15,8 @@ function ensureExtendedSiteSettingsSchema(PDO $pdo)
             `receipt_paper_width_mm` int(11) DEFAULT NULL,
             `receipt_page_margin_mm` int(11) DEFAULT NULL,
             `receipt_footer_text` text DEFAULT NULL,
+            `transfer_numbers_json` longtext DEFAULT NULL,
+            `work_schedules_json` longtext DEFAULT NULL,
             `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
@@ -24,6 +26,8 @@ function ensureExtendedSiteSettingsSchema(PDO $pdo)
         'receipt_paper_width_mm' => "ALTER TABLE `site_settings` ADD COLUMN `receipt_paper_width_mm` int(11) DEFAULT NULL AFTER `logo_path`",
         'receipt_page_margin_mm' => "ALTER TABLE `site_settings` ADD COLUMN `receipt_page_margin_mm` int(11) DEFAULT NULL AFTER `receipt_paper_width_mm`",
         'receipt_footer_text'    => "ALTER TABLE `site_settings` ADD COLUMN `receipt_footer_text` text DEFAULT NULL AFTER `receipt_page_margin_mm`",
+        'transfer_numbers_json'  => "ALTER TABLE `site_settings` ADD COLUMN `transfer_numbers_json` longtext DEFAULT NULL AFTER `receipt_footer_text`",
+        'work_schedules_json'    => "ALTER TABLE `site_settings` ADD COLUMN `work_schedules_json` longtext DEFAULT NULL AFTER `transfer_numbers_json`",
     ];
 
     foreach ($columns as $columnName => $sql) {
@@ -46,4 +50,31 @@ function getFirstSiteSettingsId(PDO $pdo): ?int
     }
 
     return (int)$row['id'];
+}
+
+function getSiteTransferTypeOptions(): array
+{
+    return [
+        'wallet' => 'رقم محفظة',
+        'instapay' => 'انستا باي',
+    ];
+}
+
+function getSiteScheduleAudienceOptions(): array
+{
+    return [
+        'men' => 'رجال فقط',
+        'women' => 'سيدات فقط',
+        'all' => 'رجال وسيدات',
+    ];
+}
+
+function decodeSiteSettingsJsonList($value): array
+{
+    if (!is_string($value) || trim($value) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($value, true);
+    return is_array($decoded) ? $decoded : [];
 }
