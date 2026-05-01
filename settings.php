@@ -242,22 +242,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
                 } else {
                     // مجلد الرفع (تأكد من وجوده وصلاحياته)
                     $uploadDir  = 'uploads/';
-                    if (!is_dir($uploadDir)) {
-                        @mkdir($uploadDir, 0755, true);
-                    }
-
-                    $ext = $allowedMimeTypes[$detectedMimeType];
-                    try {
-                        $fileName = 'logo_' . bin2hex(random_bytes(16)) . '.' . $ext;
-                    } catch (Exception $e) {
-                        $fileName = 'logo_' . uniqid('', true) . '.' . $ext;
-                    }
-                    $targetPath = $uploadDir . $fileName;
-
-                    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-                        $newLogoPath = $targetPath;
+                    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+                        $errors[] = "تعذر إنشاء مجلد حفظ الشعار.";
                     } else {
-                        $errors[] = "فشل رفع ملف الشعار.";
+                        $ext = $allowedMimeTypes[$detectedMimeType];
+                        try {
+                            $fileName = 'logo_' . bin2hex(random_bytes(16)) . '.' . $ext;
+                            $targetPath = $uploadDir . $fileName;
+
+                            if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                                $newLogoPath = $targetPath;
+                            } else {
+                                $errors[] = "فشل رفع ملف الشعار.";
+                            }
+                        } catch (Exception $e) {
+                            $errors[] = "تعذر تجهيز اسم آمن لملف الشعار.";
+                        }
                     }
                 }
             }
