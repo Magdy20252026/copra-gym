@@ -232,33 +232,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isManager) {
         $maxSize   = 2 * 1024 * 1024; // 2MB
 
         if ($file['error'] === UPLOAD_ERR_OK) {
+            $detectedMimeType = null;
             if ($file['size'] > $maxSize) {
                 $errors[] = "حجم ملف الشعار يجب ألا يزيد عن 2 ميجابايت.";
             } else {
                 $detectedMimeType = detectUploadedImageMimeType($file['tmp_name'] ?? '');
-            }
-
-            if ($file['size'] <= $maxSize && ($detectedMimeType === null || !isset($allowedMimeTypes[$detectedMimeType]))) {
-                $errors[] = "نوع ملف الشعار غير مسموح (يُسمح بـ JPG/PNG/WebP/GIF).";
-            } elseif ($file['size'] <= $maxSize) {
-                // مجلد الرفع (تأكد من وجوده وصلاحياته)
-                $uploadDir  = 'uploads/';
-                if (!is_dir($uploadDir)) {
-                    @mkdir($uploadDir, 0777, true);
-                }
-
-                $ext = $allowedMimeTypes[$detectedMimeType];
-                try {
-                    $fileName = 'logo_' . bin2hex(random_bytes(16)) . '.' . $ext;
-                } catch (Exception $e) {
-                    $fileName = 'logo_' . uniqid('', true) . '.' . $ext;
-                }
-                $targetPath = $uploadDir . $fileName;
-
-                if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-                    $newLogoPath = $targetPath;
+                if ($detectedMimeType === null || !isset($allowedMimeTypes[$detectedMimeType])) {
+                    $errors[] = "نوع ملف الشعار غير مسموح (يُسمح بـ JPG/PNG/WebP/GIF).";
                 } else {
-                    $errors[] = "فشل رفع ملف الشعار.";
+                    // مجلد الرفع (تأكد من وجوده وصلاحياته)
+                    $uploadDir  = 'uploads/';
+                    if (!is_dir($uploadDir)) {
+                        @mkdir($uploadDir, 0777, true);
+                    }
+
+                    $ext = $allowedMimeTypes[$detectedMimeType];
+                    try {
+                        $fileName = 'logo_' . bin2hex(random_bytes(16)) . '.' . $ext;
+                    } catch (Exception $e) {
+                        $fileName = 'logo_' . uniqid('', true) . '.' . $ext;
+                    }
+                    $targetPath = $uploadDir . $fileName;
+
+                    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                        $newLogoPath = $targetPath;
+                    } else {
+                        $errors[] = "فشل رفع ملف الشعار.";
+                    }
                 }
             }
         } else {
