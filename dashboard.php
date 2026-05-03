@@ -24,6 +24,7 @@ ensureSingleSessionSchema($pdo);
 $siteName           = "Gym System";
 $logoPath           = null;
 $userCount          = 0;
+$branchCount        = 0;
 $subscriptionCount  = 0;
 $singleSessionCount = 0;
 $newMembersCount    = 0; // اليوم
@@ -39,6 +40,9 @@ try {
 
     $stmt = $pdo->query("SELECT COUNT(*) AS c FROM users");
     $userCount = (int)$stmt->fetch()['c'];
+
+    $stmt = $pdo->query("SELECT COUNT(*) AS c FROM branches WHERE is_active = 1");
+    $branchCount = (int)$stmt->fetch()['c'];
 
     $stmt = $pdo->query("SELECT COUNT(*) AS c FROM subscriptions");
     $subscriptionCount = (int)$stmt->fetch()['c'];
@@ -69,6 +73,7 @@ try {
 $username = $_SESSION['username'] ?? '';
 $role     = $_SESSION['role'] ?? '';
 $userId   = $_SESSION['user_id'] ?? 0;
+$currentBranchName = getCurrentBranchName();
 $safeAiGreetingSiteName = trim(strip_tags((string)$siteName));
 $aiGreetingMessage = 'مرحباً، أنا Megz مساعدك الذكي لإدارة نظام جيم ' . $safeAiGreetingSiteName . ".
 اسألني عن الإيرادات والمصروفات والمبيعات والاشتراكات والموظفين أو عن أي جزء داخل النظام.";
@@ -97,6 +102,7 @@ if ($role === 'مشرف' && $userId) {
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>لوحة التحكم - <?php echo htmlspecialchars($siteName); ?></title>
     <style>
         * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
@@ -227,6 +233,19 @@ if ($role === 'مشرف' && $userId) {
 
         .user-info { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
         .user-info strong { color: var(--text-main); }
+        .branch-chip {
+            margin-top: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: var(--primary-soft);
+            color: #166534;
+            font-size: 13px;
+            font-weight: 800;
+        }
+        body.dark .branch-chip { color: #bbf7d0; }
 
         .sidebar-section-title {
             font-size: 11px;
@@ -331,6 +350,18 @@ if ($role === 'مشرف' && $userId) {
 
         .top-title { font-size: 20px; font-weight: 900; }
         .breadcrumbs { font-size: 12px; color: var(--text-muted); }
+        .top-branch {
+            margin-top: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: var(--card-bg);
+            box-shadow: 0 0 0 1px var(--sidebar-border);
+            font-size: 13px;
+            font-weight: 800;
+        }
 
         .stat-cards {
             display: flex;
@@ -630,6 +661,35 @@ if ($role === 'مشرف' && $userId) {
         }
 
         @media (max-width: 768px) {
+            .layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                border-left: none;
+                border-bottom: 1px solid var(--sidebar-border);
+            }
+
+            .main {
+                padding: 16px 12px 90px;
+            }
+
+            .top-bar {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+
+            .stat-cards {
+                flex-direction: column;
+            }
+
+            .stat-card {
+                min-width: 0;
+                width: 100%;
+            }
+
             .ai-chat-toggle {
                 left: 16px;
                 bottom: 16px;
@@ -676,6 +736,10 @@ if ($role === 'مشرف' && $userId) {
                 مستخدم مسجّل: <strong><?php echo htmlspecialchars($username); ?></strong>
                 — صلاحية: <strong><?php echo htmlspecialchars($role); ?></strong>
             </div>
+            <div class="branch-chip">
+                <span>🏢</span>
+                <span><?php echo htmlspecialchars($currentBranchName !== '' ? $currentBranchName : 'بدون فرع'); ?></span>
+            </div>
         </div>
 
         <div>
@@ -695,7 +759,13 @@ if ($role === 'مشرف' && $userId) {
                     <button class="menu-button" type="button" onclick="location.href='users.php'">
                         <div class="menu-left">
                             <div class="menu-icon" style="background:rgba(37,99,235,0.95);">👥</div>
-                            <div class="menu-label">اسم المستخدمين</div>
+                            <div class="menu-label">المستخدمون</div>
+                        </div>
+                    </button>
+                    <button class="menu-button" type="button" onclick="location.href='branches.php'">
+                        <div class="menu-left">
+                            <div class="menu-icon" style="background:rgba(14,165,233,0.95);">🏢</div>
+                            <div class="menu-label">الفروع</div>
                         </div>
                     </button>
                 <?php endif; ?>
@@ -961,6 +1031,10 @@ if ($role === 'مشرف' && $userId) {
             <div>
                 <div class="top-title">اللوحة الرئيسية</div>
                 <div class="breadcrumbs">نظام إدارة الجيم › لوحة التحكم</div>
+                <div class="top-branch">
+                    <span>📍</span>
+                    <span>الفرع الحالي: <?php echo htmlspecialchars($currentBranchName !== '' ? $currentBranchName : 'غير محدد'); ?></span>
+                </div>
             </div>
 
             <div class="theme-toggle">
@@ -980,6 +1054,16 @@ if ($role === 'مشرف' && $userId) {
                     <div class="stat-number"><?php echo $userCount; ?></div>
                 </div>
                 <div class="stat-icon">👥</div>
+            </div>
+
+            <div class="stat-card">
+                <div>
+                    <div class="stat-main">الفروع النشطة</div>
+                    <div class="stat-number"><?php echo $branchCount; ?></div>
+                </div>
+                <div class="stat-icon" style="background:radial-gradient(circle at 30% 0,#0ea5e9,#0284c7);">
+                    🏢
+                </div>
             </div>
 
             <div class="stat-card">

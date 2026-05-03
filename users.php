@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-// منع الدخول بدون تسجيل
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit;
@@ -9,7 +8,6 @@ if (!isset($_SESSION['user_id'])) {
 
 require_once 'config.php';
 
-// جلب اسم الموقع
 $siteName = "Gym System";
 $logoPath = null;
 
@@ -21,43 +19,67 @@ try {
     }
 } catch (Exception $e) {}
 
-$username  = $_SESSION['username'] ?? '';
-$role      = $_SESSION['role'] ?? '';
+$username = $_SESSION['username'] ?? '';
+$role = $_SESSION['role'] ?? '';
 $isManager = ($role === 'مدير');
 
-$errors  = [];
-$success = "";
+if (!$isManager) {
+    header("Location: dashboard.php");
+    exit;
+}
 
-// عمليات إضافة / تعديل / حذف
+$errors = [];
+$success = "";
+$branches = getBranches($pdo, false);
+$branchesById = [];
+foreach ($branches as $branch) {
+    $branchesById[(int)$branch['id']] = $branch;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    $formUsername = trim($_POST['username'] ?? '');
+    $formPassword = trim($_POST['password'] ?? '');
+    $formRole = $_POST['role'] ?? 'مشرف';
+    $formScope = normalizeBranchAccessScope($_POST['branch_access_scope'] ?? 'all');
+    $formBranchId = $formScope === 'single' ? (int)($_POST['branch_id'] ?? 0) : null;
 
-    // إضافة
+    if ($formUsername === '') {
+        $errors[] = "من فضلك أدخل اسم المستخدم.";
+    }
+
+    if (!in_array($formRole, ['مدير', 'مشرف'], true)) {
+        $errors[] = "الصلاحية غير صحيحة.";
+    }
+
+    if ($formScope === 'single' && (!isset($branchesById[$formBranchId]) || (int)$branchesById[$formBranchId]['is_active'] !== 1)) {
+        $errors[] = "من فضلك اختر فرعاً نشطاً للمستخدم.";
+    }
+
     if ($action === 'add') {
-        $new_username = trim($_POST['username'] ?? '');
-        $new_password = trim($_POST['password'] ?? '');
-        $new_role     = $_POST['role'] ?? 'مشرف';
-
-        if ($new_username === '' || $new_password === '') {
-            $errors[] = "من فضلك أدخل اسم المستخدم وكلمة السر.";
-        } elseif (!preg_match('/^\d{4,}$/', $new_password)) {
+        if ($formPassword === '') {
+            $errors[] = "من فضلك أدخل كلمة السر.";
+        } elseif (!preg_match('/^\d{4,}$/', $formPassword)) {
             $errors[] = "كلمة السر يجب أن تكون 4 أرقام على الأقل.";
-        } elseif (!in_array($new_role, ['مدير', 'مشرف'], true)) {
-            $errors[] = "الصلاحية غير صحيحة.";
-        } else {
+        }
+
+        if (!$errors) {
             try {
-                $check = $pdo->prepare("SELECT id FROM users WHERE username = :u LIMIT 1");
-                $check->execute([':u' => $new_username]);
+                $check = $pdo->prepare("SELECT id FROM users WHERE username = :username LIMIT 1");
+                $check->execute([':username' => $formUsername]);
                 if ($check->fetch()) {
                     $errors[] = "اسم المستخدم موجود بالفعل.";
                 } else {
-                    $stmt = $pdo->prepare(
-                        "INSERT INTO users (username, password, role) VALUES (:u, MD5(:p), :r)"
-                    );
+                    $stmt = $pdo->prepare("
+                        INSERT INTO users (username, password, role, branch_access_scope, branch_id)
+                        VALUES (:username, MD5(:password), :role, :branch_access_scope, :branch_id)
+                    ");
                     $stmt->execute([
-                        ':u' => $new_username,
-                        ':p' => $new_password,
-                        ':r' => $new_role,
+                        ':username' => $formUsername,
+                        ':password' => $formPassword,
+                        ':role' => $formRole,
+                        ':branch_access_scope' => $formScope,
+                        ':branch_id' => $formScope === 'single' ? $formBranchId : null,
                     ]);
                     $success = "تم إضافة المستخدم بنجاح.";
                 }
@@ -67,47 +89,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // تعديل
-    if ($action === 'edit' && $isManager) {
-        $edit_id       = (int)($_POST['id'] ?? 0);
-        $edit_username = trim($_POST['username'] ?? '');
-        $edit_password = trim($_POST['password'] ?? '');
-        $edit_role     = $_POST['role'] ?? 'مشرف';
+    if ($action === 'edit') {
+        $editId = (int)($_POST['id'] ?? 0);
 
-        if ($edit_id <= 0 || $edit_username === '') {
+        if ($editId <= 0) {
             $errors[] = "بيانات التعديل غير مكتملة.";
-        } elseif ($edit_password !== '' && !preg_match('/^\d{4,}$/', $edit_password)) {
+        } elseif ($formPassword !== '' && !preg_match('/^\d{4,}$/', $formPassword)) {
             $errors[] = "كلمة السر يجب أن تكون 4 أرقام على الأقل.";
-        } elseif (!in_array($edit_role, ['مدير', 'مشرف'], true)) {
-            $errors[] = "الصلاحية غير صحيحة.";
-        } else {
+        }
+
+        if (!$errors) {
             try {
-                $check = $pdo->prepare("SELECT id FROM users WHERE username = :u AND id <> :id LIMIT 1");
+                $check = $pdo->prepare("SELECT id FROM users WHERE username = :username AND id <> :id LIMIT 1");
                 $check->execute([
-                    ':u'  => $edit_username,
-                    ':id' => $edit_id,
+                    ':username' => $formUsername,
+                    ':id' => $editId,
                 ]);
                 if ($check->fetch()) {
                     $errors[] = "اسم المستخدم مستخدم من حساب آخر.";
                 } else {
-                    if ($edit_password !== '') {
-                        $stmt = $pdo->prepare(
-                            "UPDATE users SET username = :u, password = MD5(:p), role = :r WHERE id = :id"
-                        );
+                    if ($formPassword !== '') {
+                        $stmt = $pdo->prepare("
+                            UPDATE users
+                            SET username = :username,
+                                password = MD5(:password),
+                                role = :role,
+                                branch_access_scope = :branch_access_scope,
+                                branch_id = :branch_id
+                            WHERE id = :id
+                        ");
                         $stmt->execute([
-                            ':u'  => $edit_username,
-                            ':p'  => $edit_password,
-                            ':r'  => $edit_role,
-                            ':id' => $edit_id,
+                            ':username' => $formUsername,
+                            ':password' => $formPassword,
+                            ':role' => $formRole,
+                            ':branch_access_scope' => $formScope,
+                            ':branch_id' => $formScope === 'single' ? $formBranchId : null,
+                            ':id' => $editId,
                         ]);
                     } else {
-                        $stmt = $pdo->prepare(
-                            "UPDATE users SET username = :u, role = :r WHERE id = :id"
-                        );
+                        $stmt = $pdo->prepare("
+                            UPDATE users
+                            SET username = :username,
+                                role = :role,
+                                branch_access_scope = :branch_access_scope,
+                                branch_id = :branch_id
+                            WHERE id = :id
+                        ");
                         $stmt->execute([
-                            ':u'  => $edit_username,
-                            ':r'  => $edit_role,
-                            ':id' => $edit_id,
+                            ':username' => $formUsername,
+                            ':role' => $formRole,
+                            ':branch_access_scope' => $formScope,
+                            ':branch_id' => $formScope === 'single' ? $formBranchId : null,
+                            ':id' => $editId,
                         ]);
                     }
                     $success = "تم تعديل بيانات المستخدم بنجاح.";
@@ -118,21 +151,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // حذف
-    if ($action === 'delete' && $isManager) {
-        $delete_id = (int)($_POST['id'] ?? 0);
+    if ($action === 'delete') {
+        $deleteId = (int)($_POST['id'] ?? 0);
 
-        if ($delete_id <= 0) {
+        if ($deleteId <= 0) {
             $errors[] = "معرّف المستخدم غير صحيح.";
+        } elseif ($deleteId === (int)($_SESSION['user_id'] ?? 0)) {
+            $errors[] = "لا يمكنك حذف الحساب الذي سجلت به الدخول.";
         } else {
             try {
-                if ($delete_id == ($_SESSION['user_id'] ?? 0)) {
-                    $errors[] = "لا يمكنك حذف الحساب الذي سجلت به الدخول.";
-                } else {
-                    $stmt = $pdo->prepare("DELETE FROM users WHERE id = :id");
-                    $stmt->execute([':id' => $delete_id]);
-                    $success = "تم حذف المستخدم بنجاح.";
-                }
+                $stmt = $pdo->prepare("DELETE FROM users WHERE id = :id");
+                $stmt->execute([':id' => $deleteId]);
+                $success = "تم حذف المستخدم بنجاح.";
             } catch (Exception $e) {
                 $errors[] = "حدث خطأ أثناء حذف المستخدم.";
             }
@@ -140,10 +170,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// جلب المستخدمين
 $users = [];
 try {
-    $stmt = $pdo->query("SELECT id, username, role FROM users ORDER BY id DESC");
+    $stmt = $pdo->query("
+        SELECT
+            users.id,
+            users.username,
+            users.role,
+            users.branch_access_scope,
+            users.branch_id,
+            branches.branch_name
+        FROM users
+        LEFT JOIN branches ON branches.id = users.branch_id
+        ORDER BY users.id DESC
+    ");
     $users = $stmt->fetchAll();
 } catch (Exception $e) {}
 ?>
@@ -151,172 +191,202 @@ try {
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>إدارة اسم المستخدمين - <?php echo htmlspecialchars($siteName); ?></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>إدارة المستخدمين - <?php echo htmlspecialchars($siteName); ?></title>
     <style>
         * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 
         :root {
-            --bg: #f3f4f6;
+            --bg: #eef2ff;
             --card-bg: #ffffff;
+            --panel-bg: rgba(255,255,255,0.88);
             --text-main: #0f172a;
-            --text-muted: #6b7280;
+            --text-muted: #475569;
+            --border: #dbe4f0;
+            --input-bg: #f8fafc;
             --primary: #2563eb;
             --primary-soft: rgba(37,99,235,0.12);
-            --accent-green: #22c55e;
-            --danger: #ef4444;
-            --border: #e5e7eb;
-            --input-bg: #f9fafb;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #f59e0b;
+            --shadow: 0 24px 60px rgba(15,23,42,0.16);
         }
 
         body.dark {
             --bg: #020617;
-            --card-bg: #020617;
-            --text-main: #ffffff;
-            --text-muted: #e5e7eb;
-            --primary: #38bdf8;
-            --primary-soft: rgba(56,189,248,0.25);
-            --accent-green: #22c55e;
-            --danger: #fb7185;
-            --border: #1f2937;
+            --card-bg: #0f172a;
+            --panel-bg: rgba(15,23,42,0.92);
+            --text-main: #f8fafc;
+            --text-muted: #cbd5e1;
+            --border: #1e293b;
             --input-bg: #020617;
+            --primary: #38bdf8;
+            --primary-soft: rgba(56,189,248,0.18);
+            --success: #4ade80;
+            --danger: #fb7185;
+            --warning: #fbbf24;
+            --shadow: 0 24px 60px rgba(0,0,0,0.45);
         }
 
         body {
             margin: 0;
             min-height: 100vh;
-            background: var(--bg);
+            background: radial-gradient(circle at top, var(--bg), #dbeafe 120%);
             color: var(--text-main);
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            font-weight: 800; /* سميك أكثر */
-            font-size: 18px;  /* حجم أساسي أكبر */
+            font-weight: 700;
+        }
+
+        body.dark {
+            background: radial-gradient(circle at top, #0f172a, #020617 72%);
         }
 
         .page {
-            max-width: 1200px;
-            margin: 26px auto 40px;
-            padding: 0 20px;
+            width: min(1280px, 100%);
+            margin: 0 auto;
+            padding: 18px;
         }
 
         .header-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 22px;
+            gap: 16px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
         }
 
         .title-main {
-            font-size: 26px;
+            font-size: 30px;
             font-weight: 900;
         }
 
         .title-sub {
             margin-top: 6px;
-            font-size: 16px;
             color: var(--text-muted);
-            font-weight: 700;
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .theme-switch,
+        .back-button {
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            font: inherit;
+        }
+
+        .theme-switch {
+            position: relative;
+            width: 68px;
+            height: 34px;
+            padding: 0 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #e2e8f0;
+            color: #64748b;
+            box-shadow: inset 0 0 0 1px rgba(148,163,184,0.7);
+        }
+
+        .theme-switch span { z-index: 2; }
+
+        .theme-thumb {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            background: #facc15;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform .25s ease, background .25s ease;
+        }
+
+        body.dark .theme-switch {
+            background: #020617;
+            color: #e2e8f0;
+        }
+
+        body.dark .theme-thumb {
+            transform: translateX(-34px);
+            background: #0f172a;
         }
 
         .back-button {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
             gap: 8px;
-            padding: 11px 20px;
-            border-radius: 999px;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 900;
-            background: linear-gradient(90deg, #6366f1, #22c55e);
-            color: #f9fafb;
-            box-shadow: 0 16px 38px rgba(79,70,229,0.55);
+            padding: 12px 18px;
             text-decoration: none;
+            color: #ffffff;
+            background: linear-gradient(135deg, #2563eb, #22c55e);
+            box-shadow: 0 16px 34px rgba(37,99,235,0.35);
         }
-
-        .back-button:hover { filter: brightness(1.05); }
 
         .card {
-            background: var(--card-bg);
-            border-radius: 26px;
-            padding: 22px 22px 24px;
-            box-shadow:
-                0 22px 60px rgba(15,23,42,0.22),
-                0 0 0 1px rgba(255,255,255,0.65);
+            background: var(--panel-bg);
+            border: 1px solid rgba(255,255,255,0.32);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(16px);
+            overflow: hidden;
         }
 
-        /* سويتش الثيم */
-        .theme-toggle {
-            display: flex;
-            justify-content: flex-end;
+        .card-body {
+            padding: 22px;
+        }
+
+        .alerts {
+            display: grid;
+            gap: 10px;
             margin-bottom: 18px;
         }
-        .theme-switch {
-            position: relative;
-            width: 72px;
-            height: 34px;
-            border-radius: 999px;
-            background: #e5e7eb;
-            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.9);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 8px;
-            font-size: 16px;
-            color: #6b7280;
+
+        .alert {
+            padding: 12px 14px;
+            border-radius: 16px;
+            font-size: 15px;
             font-weight: 800;
         }
-        .theme-switch span { z-index: 2; user-select: none; }
-        .theme-thumb {
-            position: absolute;
-            top: 3px;
-            right: 3px;
-            width: 26px;
-            height: 26px;
-            border-radius: 999px;
-            background: #facc15;
-            box-shadow: 0 4px 10px rgba(250, 204, 21, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            transition: transform .25s ease, background .25s ease, box-shadow .25s.ease;
-        }
-        body.dark .theme-switch {
-            background: #020617;
-            box-shadow: inset 0 0 0 1px rgba(30, 64, 175, 0.9);
-            color: #e5e7eb;
-        }
-        body.dark .theme-thumb {
-            transform: translateX(-36px);
-            background: #0f172a;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.9);
+
+        .alert-error {
+            background: rgba(220,38,38,0.10);
+            color: var(--danger);
+            border: 1px solid rgba(220,38,38,0.26);
         }
 
-        /* سطر النموذج */
-        .form-row-line {
+        .alert-success {
+            background: rgba(34,197,94,0.10);
+            color: var(--success);
+            border: 1px solid rgba(34,197,94,0.26);
+        }
+
+        .grid {
             display: grid;
-            grid-template-columns: minmax(0, 2.2fr) minmax(0, 2.2fr) minmax(0, 1.4fr) auto auto;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 14px;
-            align-items: center;
-            margin-bottom: 18px;
-        }
-
-        @media (max-width: 1000px) {
-            .form-row-line {
-                grid-template-columns: minmax(0, 1fr);
-            }
+            align-items: end;
         }
 
         .field {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
         }
 
         .field label {
-            font-size: 16px;
             color: var(--text-muted);
+            font-size: 14px;
             font-weight: 900;
         }
 
@@ -324,203 +394,189 @@ try {
         input[type="password"],
         select {
             width: 100%;
-            padding: 13px 14px;
-            border-radius: 999px;
+            min-height: 52px;
+            padding: 13px 16px;
+            border-radius: 18px;
             border: 1px solid var(--border);
             background: var(--input-bg);
-            font-size: 18px;
-            font-weight: 800;
             color: var(--text-main);
-        }
-
-        input::placeholder,
-        select::placeholder {
-            font-weight: 700;
-            color: #9ca3af;
+            font-size: 16px;
+            font-weight: 800;
+            font-family: inherit;
         }
 
         input:focus,
         select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 2px var(--primary-soft);
+            box-shadow: 0 0 0 3px var(--primary-soft);
+        }
+
+        .field-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
         .btn-primary,
         .btn-save,
-        .btn-cancel {
-            border-radius: 999px;
-            padding: 11px 24px;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 900;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            white-space: nowrap;
-        }
-
-        .btn-primary {
-            background: linear-gradient(90deg, #1d4ed8, #2563eb);
-            color: #f9fafb;
-            box-shadow: 0 14px 34px rgba(37,99,235,0.55);
-        }
-
-        .btn-save {
-            background: #4b5563;
-            color: #f9fafb;
-        }
-
-        .btn-cancel {
-            background: #e5e7eb;
-            color: #4b5563;
-        }
-
-        body.dark .btn-cancel {
-            background: #111827;
-            color: #e5e7eb;
-        }
-
-        .btn-primary:hover,
-        .btn-save:hover,
-        .btn-cancel:hover { filter: brightness(1.05); }
-
-        /* بحث */
-        .search-row {
-            margin: 10px 2px 8px;
-        }
-
-        .search-row label {
-            display: block;
-            font-size: 16px;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-            font-weight: 900;
-        }
-
-        .search-row input {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-            background: var(--input-bg);
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-main);
-        }
-
-        /* جدول المستخدمين */
-        .table-wrapper {
-            margin-top: 18px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-            overflow: hidden;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 18px;
-        }
-
-        thead {
-            background: rgba(15,23,42,0.03);
-        }
-        body.dark thead {
-            background: rgba(15,23,42,0.9);
-        }
-
-        th, td {
-            padding: 12px 18px;
-            border-bottom: 1px solid var(--border);
-            text-align: right;
-        }
-
-        th {
-            font-weight: 900;
-            color: var(--text-muted);
-        }
-
-        td {
-            font-weight: 800;
-        }
-
-        .badge-role {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            padding: 6px 14px;
-            border-radius: 999px;
-            font-size: 14px;
-            font-weight: 900;
-            background: rgba(129,140,248,0.18);
-            color: #4f46e5;
-        }
-        body.dark .badge-role {
-            background: rgba(129,140,248,0.45);
-            color: #e0e7ff;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-        }
-
+        .btn-cancel,
         .btn-edit-row,
         .btn-delete-row {
-            border-radius: 999px;
-            padding: 9px 18px;
+            min-height: 50px;
+            padding: 12px 20px;
+            border-radius: 18px;
             border: none;
             cursor: pointer;
+            font: inherit;
             font-size: 15px;
             font-weight: 900;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            color: #f9fafb;
+            gap: 8px;
+        }
+
+        .btn-primary,
+        .btn-save {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #ffffff;
+        }
+
+        .btn-cancel {
+            background: rgba(148,163,184,0.16);
+            color: var(--text-main);
+        }
+
+        .search-row {
+            margin-top: 20px;
+        }
+
+        .table-shell {
+            margin-top: 18px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            overflow: hidden;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 760px;
+        }
+
+        thead {
+            background: rgba(15,23,42,0.04);
+        }
+
+        body.dark thead {
+            background: rgba(255,255,255,0.03);
+        }
+
+        th, td {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border);
+            text-align: right;
+            vertical-align: middle;
+        }
+
+        th {
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 900;
+        }
+
+        td {
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .badge-role,
+        .badge-branch {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            padding: 7px 12px;
+            font-size: 13px;
+            font-weight: 900;
+        }
+
+        .badge-role {
+            background: rgba(37,99,235,0.14);
+            color: var(--primary);
+        }
+
+        .badge-branch {
+            background: rgba(34,197,94,0.14);
+            color: var(--success);
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
         .btn-edit-row {
-            background: #f59e0b;
+            background: rgba(245,158,11,0.18);
+            color: var(--warning);
         }
 
         .btn-delete-row {
-            background: #ef4444;
-        }
-
-        .btn-edit-row:hover,
-        .btn-delete-row:hover { filter: brightness(1.06); }
-
-        .empty {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 16px;
-            padding: 18px 0;
-            font-weight: 800;
-        }
-
-        .alert {
-            padding: 11px 13px;
-            border-radius: 12px;
-            font-size: 16px;
-            margin-bottom: 12px;
-            font-weight: 800;
-        }
-
-        .alert-error {
-            background: rgba(239,68,68,0.08);
-            border: 1px solid rgba(239,68,68,0.8);
+            background: rgba(220,38,38,0.14);
             color: var(--danger);
         }
 
-        .alert-success {
-            background: rgba(34,197,94,0.08);
-            border: 1px solid rgba(34,197,94,0.8);
-            color: var(--accent-green);
+        .empty {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        @media (max-width: 1120px) {
+            .grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 720px) {
+            .page {
+                padding: 12px;
+            }
+
+            .grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .card-body {
+                padding: 16px;
+            }
+
+            .title-main {
+                font-size: 24px;
+            }
+
+            .toolbar,
+            .field-actions,
+            .actions {
+                width: 100%;
+            }
+
+            .back-button,
+            .btn-primary,
+            .btn-save,
+            .btn-cancel,
+            .btn-edit-row,
+            .btn-delete-row {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -528,224 +584,243 @@ try {
 <div class="page">
     <div class="header-bar">
         <div>
-            <div class="title-main">إدارة اسم المستخدمين</div>
-            <div class="title-sub">تحديد الحسابات المسموح لها بالدخول إلى لوحة التحكم.</div>
+            <div class="title-main">إدارة المستخدمين</div>
+            <div class="title-sub">تحديد صلاحية كل مستخدم على جميع الفروع أو على فرع واحد.</div>
         </div>
-        <div>
+        <div class="toolbar">
+            <button type="button" class="theme-switch" id="themeSwitch">
+                <span>🌙</span>
+                <span>☀️</span>
+                <span class="theme-thumb">☀️</span>
+            </button>
             <a href="dashboard.php" class="back-button">
                 <span>🏠</span>
-                <span>العودة إلى لوحة التحكم</span>
+                <span>لوحة التحكم</span>
             </a>
         </div>
     </div>
 
     <div class="card">
-        <div class="theme-toggle">
-            <div class="theme-switch" id="themeSwitch">
-                <span>🌙</span>
-                <span>☀️</span>
-                <div class="theme-thumb" id="themeThumb">☀️</div>
-            </div>
-        </div>
+        <div class="card-body">
+            <?php if ($errors || $success): ?>
+                <div class="alerts">
+                    <?php foreach ($errors as $error): ?>
+                        <div class="alert alert-error"><?php echo htmlspecialchars($error); ?></div>
+                    <?php endforeach; ?>
+                    <?php if ($success): ?>
+                        <div class="alert alert-success"><?php echo htmlspecialchars($success); ?></div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
 
-        <?php if ($errors): ?>
-            <div class="alert alert-error">
-                <?php foreach ($errors as $e): ?>
-                    <div>• <?php echo htmlspecialchars($e); ?></div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+            <form method="post" id="userForm">
+                <input type="hidden" name="action" id="formAction" value="add">
+                <input type="hidden" name="id" id="editId" value="">
 
-        <?php if ($success): ?>
-            <div class="alert alert-success">
-                <?php echo htmlspecialchars($success); ?>
-            </div>
-        <?php endif; ?>
+                <div class="grid">
+                    <div class="field">
+                        <label for="username">اسم المستخدم</label>
+                        <input type="text" id="username" name="username" placeholder="اسم المستخدم" required>
+                    </div>
 
-        <!-- نموذج بالعرض -->
-        <form method="post" action="" id="userForm">
-            <input type="hidden" name="action" id="formAction" value="add">
-            <input type="hidden" name="id" id="editId" value="">
+                    <div class="field">
+                        <label for="password">كلمة السر</label>
+                        <input type="password" id="password" name="password" placeholder="٤ أرقام فأكثر" minlength="4" inputmode="numeric" pattern="\d{4,}">
+                    </div>
 
-            <div class="form-row-line">
-                <div class="field">
-                    <label for="username">اسم المستخدم</label>
-                    <input type="text" id="username" name="username" placeholder="مثال: admin2" required>
+                    <div class="field">
+                        <label for="role">الصلاحية</label>
+                        <select id="role" name="role" required>
+                            <option value="مدير">مدير</option>
+                            <option value="مشرف" selected>مشرف</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="branch_access_scope">وصول الفروع</label>
+                        <select id="branch_access_scope" name="branch_access_scope" required>
+                            <option value="all" selected>كل الفروع</option>
+                            <option value="single">فرع واحد</option>
+                        </select>
+                    </div>
+
+                    <div class="field" id="branchField" style="display:none;">
+                        <label for="branch_id">الفرع المحدد</label>
+                        <select id="branch_id" name="branch_id">
+                            <option value="">اختر الفرع</option>
+                            <?php foreach ($branches as $branch): ?>
+                                <?php if ((int)$branch['is_active'] !== 1) { continue; } ?>
+                                <option value="<?php echo (int)$branch['id']; ?>"><?php echo htmlspecialchars($branch['branch_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
 
-                <div class="field">
-                    <label for="password">كلمة السر</label>
-                    <input type="password" id="password" name="password" placeholder="٤ أرقام فأكثر" minlength="4" inputmode="numeric" pattern="\d{4,}">
-                </div>
-
-                <div class="field">
-                    <label for="role">الصلاحية</label>
-                    <select id="role" name="role" required>
-                        <option value="مدير">مدير</option>
-                        <option value="مشرف" selected>مشرف</option>
-                    </select>
-                </div>
-
-                <div class="field" style="align-items:flex-start; justify-content:flex-end;">
+                <div class="field-actions" style="margin-top:16px;">
                     <button type="submit" class="btn-primary" id="btnAdd">
                         <span>➕</span>
-                        <span id="btnAddText">إضافة</span>
+                        <span>إضافة مستخدم</span>
                     </button>
-                </div>
-
-                <div class="field" style="align-items:flex-start; justify-content:flex-end; display:none;" id="editButtons">
-                    <button type="submit" class="btn-save" id="btnSave">
+                    <button type="submit" class="btn-save" id="btnSave" style="display:none;">
                         <span>💾</span>
                         <span>حفظ التعديل</span>
                     </button>
-                    <button type="button" class="btn-cancel" onclick="resetFormToAdd()">
-                        إلغاء
-                    </button>
+                    <button type="button" class="btn-cancel" id="btnCancel" style="display:none;">إلغاء</button>
+                </div>
+            </form>
+
+            <div class="search-row">
+                <div class="field">
+                    <label for="search">بحث</label>
+                    <input type="text" id="search" placeholder="بحث باسم المستخدم أو الصلاحية أو الفرع">
                 </div>
             </div>
-        </form>
 
-        <!-- بحث -->
-        <div class="search-row">
-            <label for="search">بحث</label>
-            <input type="text" id="search" placeholder="بحث باسم المستخدم أو الصلاحية...">
-        </div>
-
-        <!-- جدول المستخدمين -->
-        <div class="table-wrapper">
-            <table id="usersTable">
-                <thead>
-                <tr>
-                    <th>اسم المستخدم</th>
-                    <th>الصلاحية</th>
-                    <th>الإجراءات</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php if (!$users): ?>
-                    <tr>
-                        <td colspan="3" class="empty">لا يوجد مستخدمون مسجلون حتى الآن.</td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($users as $u): ?>
+            <div class="table-shell">
+                <div class="table-scroll">
+                    <table id="usersTable">
+                        <thead>
                         <tr>
-                            <td><?php echo htmlspecialchars($u['username']); ?></td>
-                            <td>
-                                <span class="badge-role">
-                                    <?php echo htmlspecialchars($u['role']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="actions">
-                                    <?php if ($isManager): ?>
-                                        <button
-                                            type="button"
-                                            class="btn-edit-row"
-                                            onclick="fillEditForm(<?php echo (int)$u['id']; ?>,'<?php echo htmlspecialchars($u['username'], ENT_QUOTES); ?>','<?php echo htmlspecialchars($u['role'], ENT_QUOTES); ?>')"
-                                        >
-                                            ✏️ تعديل
-                                        </button>
-                                        <form method="post" action="" onsubmit="return confirm('هل أنت متأكد من الحذف؟');">
-                                            <input type="hidden" name="action" value="delete">
-                                            <input type="hidden" name="id" value="<?php echo (int)$u['id']; ?>">
-                                            <button type="submit" class="btn-delete-row">🗑 حذف</button>
-                                        </form>
-                                    <?php else: ?>
-                                        <span style="font-size:16px;color:var(--text-muted);">بدون صلاحية</span>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
+                            <th>اسم المستخدم</th>
+                            <th>الصلاحية</th>
+                            <th>وصول الفروع</th>
+                            <th>الإجراءات</th>
                         </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-                </tbody>
-            </table>
+                        </thead>
+                        <tbody>
+                        <?php if (!$users): ?>
+                            <tr>
+                                <td colspan="4" class="empty">لا يوجد مستخدمون حتى الآن.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($users as $user): ?>
+                                <?php
+                                $scopeLabel = normalizeBranchAccessScope($user['branch_access_scope'] ?? 'all') === 'all'
+                                    ? 'كل الفروع'
+                                    : ((string)($user['branch_name'] ?? '') !== '' ? $user['branch_name'] : 'فرع واحد');
+                                ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($user['username']); ?></td>
+                                    <td><span class="badge-role"><?php echo htmlspecialchars($user['role']); ?></span></td>
+                                    <td><span class="badge-branch"><?php echo htmlspecialchars($scopeLabel); ?></span></td>
+                                    <td>
+                                        <div class="actions">
+                                            <button
+                                                type="button"
+                                                class="btn-edit-row"
+                                                data-id="<?php echo (int)$user['id']; ?>"
+                                                data-username="<?php echo htmlspecialchars($user['username'], ENT_QUOTES); ?>"
+                                                data-role="<?php echo htmlspecialchars($user['role'], ENT_QUOTES); ?>"
+                                                data-scope="<?php echo htmlspecialchars(normalizeBranchAccessScope($user['branch_access_scope'] ?? 'all'), ENT_QUOTES); ?>"
+                                                data-branch-id="<?php echo (int)($user['branch_id'] ?? 0); ?>"
+                                            >
+                                                ✏️ تعديل
+                                            </button>
+                                            <form method="post" onsubmit="return confirm('هل أنت متأكد من حذف المستخدم؟');">
+                                                <input type="hidden" name="action" value="delete">
+                                                <input type="hidden" name="id" value="<?php echo (int)$user['id']; ?>">
+                                                <button type="submit" class="btn-delete-row">🗑 حذف</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-    // ثيم داكن/فاتح متوافق مع لوحة التحكم
     const body = document.body;
-    const switchEl = document.getElementById('themeSwitch');
+    const themeSwitch = document.getElementById('themeSwitch');
     const savedTheme = localStorage.getItem('gymDashboardTheme') || 'light';
+    const formAction = document.getElementById('formAction');
+    const editId = document.getElementById('editId');
+    const userInput = document.getElementById('username');
+    const passInput = document.getElementById('password');
+    const roleSelect = document.getElementById('role');
+    const scopeSelect = document.getElementById('branch_access_scope');
+    const branchField = document.getElementById('branchField');
+    const branchSelect = document.getElementById('branch_id');
+    const btnAdd = document.getElementById('btnAdd');
+    const btnSave = document.getElementById('btnSave');
+    const btnCancel = document.getElementById('btnCancel');
+    const searchInput = document.getElementById('search');
+    const table = document.getElementById('usersTable');
 
     function applyTheme(mode) {
-        if (mode === 'dark') {
-            body.classList.add('dark');
-        } else {
-            body.classList.remove('dark');
-        }
+        body.classList.toggle('dark', mode === 'dark');
         localStorage.setItem('gymDashboardTheme', mode);
     }
-    applyTheme(savedTheme);
 
-    if (switchEl) {
-        switchEl.addEventListener('click', () => {
-            const isDark = body.classList.contains('dark');
-            applyTheme(isDark ? 'light' : 'dark');
-        });
-    }
-
-    // تبديل النموذج بين إضافة وتعديل
-    function fillEditForm(id, username, role) {
-        const formAction = document.getElementById('formAction');
-        const editId     = document.getElementById('editId');
-        const userInput  = document.getElementById('username');
-        const passInput  = document.getElementById('password');
-        const roleSelect = document.getElementById('role');
-        const btnAdd     = document.getElementById('btnAdd');
-        const editBtns   = document.getElementById('editButtons');
-
-        formAction.value = 'edit';
-        editId.value     = id;
-        userInput.value  = username;
-        roleSelect.value = role || 'مشرف';
-        passInput.value  = '';
-
-        btnAdd.style.display   = 'none';
-        editBtns.style.display = 'flex';
-
-        userInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    function syncBranchField() {
+        const singleScope = scopeSelect.value === 'single';
+        branchField.style.display = singleScope ? 'flex' : 'none';
+        branchSelect.required = singleScope;
+        if (!singleScope) {
+            branchSelect.value = '';
+        }
     }
 
     function resetFormToAdd() {
-        const formAction = document.getElementById('formAction');
-        const editId     = document.getElementById('editId');
-        const userInput  = document.getElementById('username');
-        const passInput  = document.getElementById('password');
-        const roleSelect = document.getElementById('role');
-        const btnAdd     = document.getElementById('btnAdd');
-        const editBtns   = document.getElementById('editButtons');
-
         formAction.value = 'add';
-        editId.value     = '';
-        userInput.value  = '';
-        passInput.value  = '';
+        editId.value = '';
+        userInput.value = '';
+        passInput.value = '';
         roleSelect.value = 'مشرف';
-
-        btnAdd.style.display   = 'inline-flex';
-        editBtns.style.display = 'none';
+        scopeSelect.value = 'all';
+        branchSelect.value = '';
+        syncBranchField();
+        btnAdd.style.display = 'inline-flex';
+        btnSave.style.display = 'none';
+        btnCancel.style.display = 'none';
     }
 
-    // لو لا يوجد أخطاء ولا رسالة نجاح نرجع لوضع الإضافة
+    function fillEditForm(button) {
+        formAction.value = 'edit';
+        editId.value = button.dataset.id || '';
+        userInput.value = button.dataset.username || '';
+        passInput.value = '';
+        roleSelect.value = button.dataset.role || 'مشرف';
+        scopeSelect.value = button.dataset.scope || 'all';
+        branchSelect.value = button.dataset.branchId || '';
+        syncBranchField();
+        btnAdd.style.display = 'none';
+        btnSave.style.display = 'inline-flex';
+        btnCancel.style.display = 'inline-flex';
+        userInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    applyTheme(savedTheme);
+    syncBranchField();
+
+    if (themeSwitch) {
+        themeSwitch.addEventListener('click', () => {
+            applyTheme(body.classList.contains('dark') ? 'light' : 'dark');
+        });
+    }
+
+    scopeSelect.addEventListener('change', syncBranchField);
+    btnCancel.addEventListener('click', resetFormToAdd);
+
+    document.querySelectorAll('.btn-edit-row').forEach((button) => {
+        button.addEventListener('click', () => fillEditForm(button));
+    });
+
+    searchInput.addEventListener('input', function () {
+        const value = this.value.toLowerCase();
+        table.querySelectorAll('tbody tr').forEach((row) => {
+            row.style.display = row.innerText.toLowerCase().includes(value) ? '' : 'none';
+        });
+    });
+
     <?php if (!$errors && !$success): ?>
     resetFormToAdd();
     <?php endif; ?>
-
-    // بحث بسيط في الجدول
-    const searchInput = document.getElementById('search');
-    const table       = document.getElementById('usersTable');
-    if (searchInput && table) {
-        searchInput.addEventListener('input', function () {
-            const value = this.value.toLowerCase();
-            const rows  = table.querySelectorAll('tbody tr');
-            rows.forEach(row => {
-                const cellsText = row.innerText.toLowerCase();
-                row.style.display = cellsText.includes(value) ? '' : 'none';
-            });
-        });
-    }
 </script>
 </body>
 </html>
