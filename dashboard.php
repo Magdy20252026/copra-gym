@@ -378,7 +378,7 @@ if ($role === 'مشرف' && $userId) {
             margin: 4px 0 2px;
             color: var(--text-muted);
             font-size: 13px;
-            font-weight: 800;
+            font-weight: 600;
         }
 
         .stat-card {
