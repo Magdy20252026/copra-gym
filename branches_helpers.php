@@ -100,9 +100,6 @@ function branchAwareTransformSql(string $sql): string
     }
 
     $statementType = strtoupper((string)preg_replace('/^(\w+).*$/s', '$1', trim($sql)));
-    if ($statementType === '') {
-        return $sql;
-    }
 
     return match ($statementType) {
         'SELECT' => branchAwareTransformSelectSql($sql, $branchId),
@@ -238,9 +235,87 @@ function branchAwareFindMatchingParenthesis(string $sql, int $openPosition): ?in
 {
     $depth = 0;
     $length = strlen($sql);
+    $inSingleQuote = false;
+    $inDoubleQuote = false;
+    $inBacktick = false;
+    $inLineComment = false;
+    $inBlockComment = false;
 
     for ($index = $openPosition; $index < $length; $index++) {
         $character = $sql[$index];
+        $nextCharacter = $index + 1 < $length ? $sql[$index + 1] : '';
+
+        if ($inLineComment) {
+            if ($character === "\n") {
+                $inLineComment = false;
+            }
+            continue;
+        }
+
+        if ($inBlockComment) {
+            if ($character === '*' && $nextCharacter === '/') {
+                $inBlockComment = false;
+                $index++;
+            }
+            continue;
+        }
+
+        if ($inSingleQuote) {
+            if ($character === '\\') {
+                $index++;
+                continue;
+            }
+            if ($character === "'") {
+                $inSingleQuote = false;
+            }
+            continue;
+        }
+
+        if ($inDoubleQuote) {
+            if ($character === '\\') {
+                $index++;
+                continue;
+            }
+            if ($character === '"') {
+                $inDoubleQuote = false;
+            }
+            continue;
+        }
+
+        if ($inBacktick) {
+            if ($character === '`') {
+                $inBacktick = false;
+            }
+            continue;
+        }
+
+        if ($character === '-' && $nextCharacter === '-') {
+            $inLineComment = true;
+            $index++;
+            continue;
+        }
+
+        if ($character === '/' && $nextCharacter === '*') {
+            $inBlockComment = true;
+            $index++;
+            continue;
+        }
+
+        if ($character === "'") {
+            $inSingleQuote = true;
+            continue;
+        }
+
+        if ($character === '"') {
+            $inDoubleQuote = true;
+            continue;
+        }
+
+        if ($character === '`') {
+            $inBacktick = true;
+            continue;
+        }
+
         if ($character === '(') {
             $depth++;
         } elseif ($character === ')') {
@@ -277,6 +352,9 @@ function branchAwareFindClausePosition(string $sql): ?int
 function branchAwareQuoteIdentifier(string $identifier): string
 {
     $identifier = trim($identifier, '`');
+    if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $identifier)) {
+        throw new InvalidArgumentException('Invalid SQL identifier.');
+    }
     return '`' . str_replace('`', '', $identifier) . '`';
 }
 
