@@ -1083,7 +1083,7 @@ if ($role === 'مشرف' && $userId) {
                     <div class="stat-number"><?php echo $membersWithRemainingBalanceCount; ?></div>
                 </div>
                 <div class="stat-icon" style="background:radial-gradient(circle at 30% 0,#0ea5e9,#0284c7);">
-                    💳
+                    💰
                 </div>
             </div>
 
