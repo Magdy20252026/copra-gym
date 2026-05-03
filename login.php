@@ -13,9 +13,9 @@ if (isset($_SESSION['user_id'])) {
     exit;
 }
 
-// جلب اسم الموقع والشعار
 $siteName = "Gym System";
 $logoPath = null;
+$branches = [];
 
 try {
     $stmt = $pdo->query("SELECT site_name, logo_path FROM site_settings ORDER BY id ASC LIMIT 1");
@@ -23,17 +23,22 @@ try {
         $siteName = $row['site_name'];
         $logoPath = $row['logo_path'];
     }
-} catch (Exception $e) {
-    // يمكن تجاهل الخطأ هنا
-}
+} catch (Exception $e) {}
+
+try {
+    $branches = getBranches($pdo, true);
+} catch (Exception $e) {}
 
 $error = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
+    $branchId = (int)($_POST['branch_id'] ?? 0);
 
-    if ($username === '' || $password === '') {
+    if ($branchId <= 0 || !$branches) {
+        $error = "من فضلك اختر الفرع";
+    } elseif ($username === '' || $password === '') {
         $error = "من فضلك أدخل اسم المستخدم وكلمة السر";
     } else {
         $sql = "SELECT * FROM users WHERE username = :username AND password = MD5(:password) LIMIT 1";
@@ -44,17 +49,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $user = $stmt->fetch();
 
-        if ($user) {
-            // إنشاء السيشن
+        $selectedBranch = getBranchById($pdo, $branchId);
+
+        if ($user && $selectedBranch && (int)$selectedBranch['is_active'] === 1 && userCanAccessBranch($user, $branchId)) {
             $_SESSION['user_id']   = $user['id'];
             $_SESSION['username']  = $user['username'];
             $_SESSION['role']      = $user['role'];
-
-            // تحويل للوحة التحكم
+            setActiveBranchSession((int)$selectedBranch['id'], (string)$selectedBranch['branch_name']);
             header("Location: dashboard.php");
             exit;
         } else {
-            $error = "بيانات الدخول غير صحيحة";
+            clearActiveBranchSession();
+            $error = "بيانات الدخول غير صحيحة أو الفرع غير متاح لهذا المستخدم";
         }
     }
 }
@@ -114,12 +120,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .card-wrapper {
             width: 100%;
-            max-width: 460px;
+            max-width: 520px;
             display: flex;
             justify-content: center;
         }
 
         .login-card {
+            width: 100%;
             background: var(--card-bg);
             border-radius: 24px;
             padding: 26px 28px 22px;
@@ -276,7 +283,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         input[type="text"],
-        input[type="password"] {
+        input[type="password"],
+        select {
             width: 100%;
             padding: 12px 38px 12px 10px;
             border-radius: 12px;
@@ -289,13 +297,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         input[type="text"]::placeholder,
-        input[type="password"]::placeholder {
+        input[type="password"]::placeholder,
+        select::placeholder {
             color: rgba(148, 163, 184, 0.9);
             font-weight: 500;
         }
 
         input[type="text"]:focus,
-        input[type="password"]:focus {
+        input[type="password"]:focus,
+        select:focus {
             outline: none;
             border-color: var(--accent-blue);
             box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.55);
@@ -303,8 +313,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         body.dark input[type="text"]:focus,
-        body.dark input[type="password"]:focus {
+        body.dark input[type="password"]:focus,
+        body.dark select:focus {
             background-color: #020617;
+        }
+
+        select {
+            appearance: none;
+            cursor: pointer;
         }
 
         .btn-submit {
@@ -383,6 +399,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background: rgba(31, 41, 55, 0.95);
             color: #f9fafb;
         }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 12px;
+                align-items: stretch;
+            }
+
+            .card-wrapper {
+                max-width: none;
+                align-items: stretch;
+            }
+
+            .login-card {
+                min-height: calc(100vh - 24px);
+                border-radius: 22px;
+                display: flex;
+                align-items: center;
+            }
+
+            .card-inner {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -418,10 +457,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <form method="post" action="">
                 <div class="form-group">
+                    <label class="form-label" for="branch_id">الفرع</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">🏢</span>
+                        <select id="branch_id" name="branch_id" required>
+                            <option value="">اختر الفرع</option>
+                            <?php foreach ($branches as $branch): ?>
+                                <option value="<?php echo (int)$branch['id']; ?>" <?php echo (int)($_POST['branch_id'] ?? 0) === (int)$branch['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($branch['branch_name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
                     <label class="form-label" for="username">اسم المستخدم</label>
                     <div class="input-wrapper">
                         <span class="input-icon">👤</span>
-                        <input type="text" id="username" name="username" required autocomplete="username" placeholder="ادخل اسم المستخدم">
+                        <input type="text" id="username" name="username" required autocomplete="username" placeholder="ادخل اسم المستخدم" value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>">
                     </div>
                 </div>
 

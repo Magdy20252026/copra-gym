@@ -23,6 +23,7 @@ if (!function_exists('appMysqlSessionTimeZoneOffset')) {
 date_default_timezone_set(appTimezoneName());
 
 require_once __DIR__ . '/datetime_format_helpers.php';
+require_once __DIR__ . '/branches_helpers.php';
 
 $host     = "sql202.infinityfree.com";
 $dbname   = "if0_41408267_club_01";
@@ -32,7 +33,7 @@ $port     = 3306;
 
 try {
     $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
-    $pdo = new PDO($dsn, $username, $password, [
+    $pdo = new BranchAwarePDO($dsn, $username, $password, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
@@ -42,6 +43,9 @@ try {
 }
 
 require_once __DIR__ . '/single_session_helpers.php';
+ensureBranchesSchema($pdo);
+ensureUserBranchesSchema($pdo);
+ensureBranchScopedTablesSchema($pdo);
 ensureSingleSessionSchema($pdo);
 
 function ensureSubscriptionCategorySchema(PDO $pdo): void
