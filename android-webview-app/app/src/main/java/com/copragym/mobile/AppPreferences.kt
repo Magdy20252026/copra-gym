@@ -34,7 +34,8 @@ object AppPreferences {
     fun getLastBranchId(context: Context): Int = prefs(context).getInt(KEY_LAST_BRANCH_ID, 0)
 
     fun saveLastBranchId(context: Context, branchId: Int) {
-        if (branchId < 0) {
+        if (branchId <= 0) {
+            clearLastBranchId(context)
             return
         }
 

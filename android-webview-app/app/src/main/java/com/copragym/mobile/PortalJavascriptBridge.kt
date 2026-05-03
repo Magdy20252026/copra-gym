@@ -12,18 +12,21 @@ import java.util.Base64
 class PortalJavascriptBridge(
     private val context: Context,
 ) {
-    @JavascriptInterface
-    fun saveLastMemberPhone(phone: String) {
-        AppPreferences.saveLastMemberPhone(context, phone)
+    private fun scheduleNotifications() {
         NotificationScheduler.scheduleImmediate(context)
         NotificationScheduler.schedulePeriodic(context)
     }
 
     @JavascriptInterface
+    fun saveLastMemberPhone(phone: String) {
+        AppPreferences.saveLastMemberPhone(context, phone)
+        scheduleNotifications()
+    }
+
+    @JavascriptInterface
     fun saveLastBranchId(branchId: Int) {
         AppPreferences.saveLastBranchId(context, branchId)
-        NotificationScheduler.scheduleImmediate(context)
-        NotificationScheduler.schedulePeriodic(context)
+        scheduleNotifications()
     }
 
     @JavascriptInterface
