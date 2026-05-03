@@ -520,6 +520,34 @@ function getBranchById(PDO $pdo, int $branchId): ?array
     return $branch ?: null;
 }
 
+function resolvePublicBranchSelection(PDO $pdo, int $requestedBranchId = 0): array
+{
+    $branches = getBranches($pdo, true);
+    $selectedBranchId = $requestedBranchId > 0
+        ? $requestedBranchId
+        : (count($branches) === 1 ? (int)($branches[0]['id'] ?? 0) : 0);
+    $selectedBranch = null;
+
+    if ($selectedBranchId > 0) {
+        $selectedBranch = getBranchById($pdo, $selectedBranchId);
+        if ($selectedBranch && (int)($selectedBranch['is_active'] ?? 0) === 1) {
+            setActiveBranchSession((int)$selectedBranch['id'], (string)$selectedBranch['branch_name']);
+        } else {
+            $selectedBranch = null;
+            $selectedBranchId = 0;
+            clearActiveBranchSession();
+        }
+    } else {
+        clearActiveBranchSession();
+    }
+
+    return [
+        'branches' => $branches,
+        'selected_branch_id' => $selectedBranchId,
+        'selected_branch' => $selectedBranch,
+    ];
+}
+
 function userCanAccessBranch(array $user, int $branchId): bool
 {
     if ($branchId <= 0) {

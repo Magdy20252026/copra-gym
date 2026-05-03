@@ -20,8 +20,21 @@ class PortalJavascriptBridge(
     }
 
     @JavascriptInterface
+    fun saveLastBranchId(branchId: String) {
+        AppPreferences.saveLastBranchId(context, branchId.toIntOrNull() ?: 0)
+        NotificationScheduler.scheduleImmediate(context)
+        NotificationScheduler.schedulePeriodic(context)
+    }
+
+    @JavascriptInterface
     fun clearLastMemberPhone() {
         AppPreferences.clearLastMemberPhone(context)
+        AppPreferences.saveLastNotificationId(context, 0)
+    }
+
+    @JavascriptInterface
+    fun clearLastBranchId() {
+        AppPreferences.clearLastBranchId(context)
         AppPreferences.saveLastNotificationId(context, 0)
     }
 

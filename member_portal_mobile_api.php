@@ -1,5 +1,6 @@
 <?php
 
+session_start();
 require_once 'config.php';
 require_once 'member_portal_nutrition_helpers.php';
 require_once 'member_notifications_helpers.php';
@@ -47,6 +48,9 @@ function absolutePortalUrl(?string $path, string $baseUrl): ?string
 
 $siteName = 'Gym System';
 $logoPath = null;
+$branchSelection = resolvePublicBranchSelection($pdo, (int)($_GET['branch_id'] ?? 0));
+$selectedBranchId = (int)$branchSelection['selected_branch_id'];
+
 try {
     $stmt = $pdo->query("SELECT site_name, logo_path FROM site_settings ORDER BY id ASC LIMIT 1");
     if ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -64,14 +68,19 @@ $response = [
     'ok' => true,
     'app_name' => $siteName,
     'logo_url' => absolutePortalUrl($logoPath, $baseUrl),
-    'portal_url' => absolutePortalUrl('member_portal.php', $baseUrl),
+    'portal_url' => absolutePortalUrl('member_portal.php' . ($selectedBranchId > 0 ? '?branch_id=' . $selectedBranchId : ''), $baseUrl),
     'member_found' => false,
     'member_phone' => '',
+    'branch_id' => $selectedBranchId,
     'notifications' => [],
     'latest_notification_id' => $afterId,
 ];
 
 if ($phone === '') {
+    respondMemberPortalMobileApi($response);
+}
+
+if ($selectedBranchId <= 0) {
     respondMemberPortalMobileApi($response);
 }
 

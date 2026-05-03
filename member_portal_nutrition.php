@@ -26,9 +26,15 @@ function memberPortalNutritionJson(array $payload, int $status = 200): void
 $request = memberPortalNutritionGetRequestData();
 $action = trim((string)($request['action'] ?? ''));
 $phone = trim((string)($request['phone'] ?? ''));
+$branchSelection = resolvePublicBranchSelection($pdo, (int)($request['branch_id'] ?? 0));
+$selectedBranchId = (int)$branchSelection['selected_branch_id'];
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     memberPortalNutritionJson(['ok' => false, 'message' => 'طريقة الطلب غير مدعومة.'], 405);
+}
+
+if ($selectedBranchId <= 0) {
+    memberPortalNutritionJson(['ok' => false, 'message' => 'من فضلك اختر الفرع أولاً.'], 422);
 }
 
 if ($phone === '') {
@@ -50,7 +56,7 @@ try {
 }
 
 if (!$memberData) {
-    memberPortalNutritionJson(['ok' => false, 'message' => 'لا يوجد مشترك بهذا رقم الهاتف.'], 404);
+    memberPortalNutritionJson(['ok' => false, 'message' => 'لا يوجد مشترك بهذا رقم الهاتف داخل الفرع المحدد.'], 404);
 }
 
 if ($action !== 'generate_plan') {

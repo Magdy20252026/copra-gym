@@ -5,6 +5,7 @@ import android.content.Context
 object AppPreferences {
     private const val PREFS_NAME = "copra_gym_mobile"
     private const val KEY_LAST_MEMBER_PHONE = "last_member_phone"
+    private const val KEY_LAST_BRANCH_ID = "last_branch_id"
     private const val KEY_LAST_NOTIFICATION_ID = "last_notification_id"
     private const val KEY_APP_NAME = "app_name"
     private const val KEY_LOGO_URL = "logo_url"
@@ -26,6 +27,25 @@ object AppPreferences {
     fun clearLastMemberPhone(context: Context) {
         prefs(context).edit()
             .remove(KEY_LAST_MEMBER_PHONE)
+            .putInt(KEY_LAST_NOTIFICATION_ID, 0)
+            .apply()
+    }
+
+    fun getLastBranchId(context: Context): Int = prefs(context).getInt(KEY_LAST_BRANCH_ID, 0)
+
+    fun saveLastBranchId(context: Context, branchId: Int) {
+        val normalizedBranchId = branchId.coerceAtLeast(0)
+        val currentBranchId = getLastBranchId(context)
+        val editor = prefs(context).edit().putInt(KEY_LAST_BRANCH_ID, normalizedBranchId)
+        if (currentBranchId != normalizedBranchId) {
+            editor.putInt(KEY_LAST_NOTIFICATION_ID, 0)
+        }
+        editor.apply()
+    }
+
+    fun clearLastBranchId(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_LAST_BRANCH_ID)
             .putInt(KEY_LAST_NOTIFICATION_ID, 0)
             .apply()
     }

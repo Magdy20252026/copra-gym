@@ -11,12 +11,13 @@ class NotificationWorker(
 
     override fun doWork(): Result {
         val lastPhone = AppPreferences.getLastMemberPhone(applicationContext)
-        if (lastPhone.isBlank()) {
+        val lastBranchId = AppPreferences.getLastBranchId(applicationContext)
+        if (lastPhone.isBlank() || lastBranchId <= 0) {
             return Result.success()
         }
 
         val portalState = runCatching {
-            PortalApi.fetchState(lastPhone, AppPreferences.getLastNotificationId(applicationContext))
+            PortalApi.fetchState(lastPhone, lastBranchId, AppPreferences.getLastNotificationId(applicationContext))
         }.getOrNull() ?: return Result.retry()
 
         if (!portalState.ok) {
@@ -30,6 +31,7 @@ class NotificationWorker(
         }
 
         AppPreferences.saveLastMemberPhone(applicationContext, portalState.memberPhone)
+        AppPreferences.saveLastBranchId(applicationContext, portalState.branchId)
         AppPreferences.saveAppName(applicationContext, portalState.appName)
         AppPreferences.saveLogoUrl(applicationContext, portalState.logoUrl)
         AppNotificationManager.ensureChannel(applicationContext)

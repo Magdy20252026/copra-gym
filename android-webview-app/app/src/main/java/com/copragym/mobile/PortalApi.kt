@@ -23,12 +23,16 @@ object PortalApi {
         val logoUrl: String,
         val memberFound: Boolean,
         val memberPhone: String,
+        val branchId: Int,
         val latestNotificationId: Int,
         val notifications: List<PortalNotification>,
     )
 
-    fun fetchState(phone: String, afterId: Int): PortalState? {
+    fun fetchState(phone: String, branchId: Int, afterId: Int): PortalState? {
         val query = buildString {
+            append("branch_id=")
+            append(branchId.coerceAtLeast(0))
+            append("&")
             append("phone=")
             append(URLEncoder.encode(phone, Charsets.UTF_8.name()))
             append("&after_id=")
@@ -78,6 +82,7 @@ object PortalApi {
             logoUrl = json.optString("logo_url"),
             memberFound = json.optBoolean("member_found"),
             memberPhone = json.optString("member_phone"),
+            branchId = json.optInt("branch_id"),
             latestNotificationId = json.optInt("latest_notification_id"),
             notifications = notifications,
         )

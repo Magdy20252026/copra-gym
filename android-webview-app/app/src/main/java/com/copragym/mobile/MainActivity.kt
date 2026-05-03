@@ -73,12 +73,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildInitialUrl(): String {
         val savedPhone = AppPreferences.getLastMemberPhone(this)
-        if (savedPhone.isBlank()) {
+        val savedBranchId = AppPreferences.getLastBranchId(this)
+        if (savedPhone.isBlank() || savedBranchId <= 0) {
             return BuildConfig.PORTAL_URL
         }
 
         val separator = if (BuildConfig.PORTAL_URL.contains('?')) '&' else '?'
-        return BuildConfig.PORTAL_URL + separator + "phone=" + URLEncoder.encode(savedPhone, Charsets.UTF_8.name())
+        return BuildConfig.PORTAL_URL +
+            separator +
+            "branch_id=" + savedBranchId +
+            "&phone=" + URLEncoder.encode(savedPhone, Charsets.UTF_8.name())
     }
 
     private fun requestNotificationPermissionIfNeeded() {

@@ -7,6 +7,11 @@ require_once 'site_settings_helpers.php';
 
 ensureExtendedSiteSettingsSchema($pdo);
 
+$branchSelection = resolvePublicBranchSelection($pdo, (int)($_GET['branch_id'] ?? 0));
+$branches = $branchSelection['branches'];
+$selectedBranchId = (int)$branchSelection['selected_branch_id'];
+$selectedBranch = $branchSelection['selected_branch'];
+
 // جلب اسم الجيم واللوجو من site_settings
 $siteName = "Gym System";
 $logoPath = null;
@@ -32,17 +37,21 @@ $memberNotifications = [];
 $errorMsg   = '';
 
 if ($phoneInput !== '') {
-    try {
-        $memberData = memberPortalFindMemberData($pdo, $phoneInput, $logoPath);
+    if ($selectedBranchId <= 0) {
+        $errorMsg = 'من فضلك اختر الفرع أولاً.';
+    } else {
+        try {
+            $memberData = memberPortalFindMemberData($pdo, $phoneInput, $logoPath);
 
-        if (!$memberData) {
-            $errorMsg = 'لا يوجد مشترك بهذا رقم الهاتف.';
-        } else {
-            syncMemberSubscriptionNotifications($pdo, (int)$memberData['id']);
-            $memberNotifications = getMemberPortalNotifications($pdo, (int)$memberData['id']);
+            if (!$memberData) {
+                $errorMsg = 'لا يوجد مشترك بهذا رقم الهاتف داخل الفرع المحدد.';
+            } else {
+                syncMemberSubscriptionNotifications($pdo, (int)$memberData['id']);
+                $memberNotifications = getMemberPortalNotifications($pdo, (int)$memberData['id']);
+            }
+        } catch (Exception $e) {
+            $errorMsg = 'حدث خطأ أثناء جلب بيانات المشترك.';
         }
-    } catch (Exception $e) {
-        $errorMsg = 'حدث خطأ أثناء جلب بيانات المشترك.';
     }
 }
 
@@ -206,6 +215,7 @@ function barcodeImgUrl($text) {
             color:var(--text-muted);
         }
         input[type="text"],
+        select,
         input[type="number"] {
             padding:9px 12px;
             border-radius:999px;
@@ -216,7 +226,8 @@ function barcodeImgUrl($text) {
             color:var(--text-main);
             min-width:220px;
         }
-        input[type="text"]:focus {
+        input[type="text"]:focus,
+        select:focus {
             outline:none;
             border-color:var(--primary);
             box-shadow:0 0 0 2px var(--primary-soft);
@@ -688,6 +699,17 @@ function barcodeImgUrl($text) {
         <!-- نموذج البحث -->
         <form method="get" action="" class="search-box">
             <div class="field">
+                <label for="branch_id">الفرع</label>
+                <select id="branch_id" name="branch_id" required>
+                    <option value="">اختر الفرع</option>
+                    <?php foreach ($branches as $branch): ?>
+                        <option value="<?php echo (int)$branch['id']; ?>" <?php echo $selectedBranchId === (int)$branch['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($branch['branch_name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="field">
                 <label for="phone">رقم الهاتف</label>
                 <input type="text" id="phone" name="phone"
                        placeholder="اكتب رقم الهاتف واضغط بحث"
@@ -867,7 +889,7 @@ function barcodeImgUrl($text) {
                     </div>
                 </div>
 
-                <div class="assistant-panel" data-member-phone="<?php echo htmlspecialchars($memberData['phone']); ?>" data-member-name="<?php echo htmlspecialchars($memberData['name']); ?>" data-site-name="<?php echo htmlspecialchars($siteName); ?>">
+                <div class="assistant-panel" data-member-phone="<?php echo htmlspecialchars($memberData['phone']); ?>" data-member-name="<?php echo htmlspecialchars($memberData['name']); ?>" data-site-name="<?php echo htmlspecialchars($siteName); ?>" data-branch-id="<?php echo (int)$selectedBranchId; ?>">
                     <div class="assistant-head">
                         <div>
                             <div class="assistant-title">ابدأ محادثة مع كابتن MO</div>
@@ -978,11 +1000,26 @@ function barcodeImgUrl($text) {
     }
 
     const memberPhoneStorageKey = 'gymPortalLastMemberPhone';
+    const memberBranchStorageKey = 'gymPortalLastBranchId';
+    const branchSelectEl = document.getElementById('branch_id');
     const phoneInputEl = document.getElementById('phone');
     const searchForm = document.querySelector('.search-box');
     const currentMemberPhone = <?php echo json_encode($memberData['phone'] ?? '', JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     const currentSearchPhone = <?php echo json_encode($phoneInput, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const currentSearchBranchId = <?php echo (int)$selectedBranchId; ?>;
     const wasAutoRestored = <?php echo json_encode(isset($_GET['restored']) && (string)$_GET['restored'] === '1'); ?>;
+
+    if (currentSearchBranchId > 0) {
+        localStorage.setItem(memberBranchStorageKey, String(currentSearchBranchId));
+        if (window.TheClubGymAndroid && typeof window.TheClubGymAndroid.saveLastBranchId === 'function') {
+            window.TheClubGymAndroid.saveLastBranchId(String(currentSearchBranchId));
+        }
+    } else {
+        localStorage.removeItem(memberBranchStorageKey);
+        if (window.TheClubGymAndroid && typeof window.TheClubGymAndroid.clearLastBranchId === 'function') {
+            window.TheClubGymAndroid.clearLastBranchId();
+        }
+    }
 
     if (currentMemberPhone) {
         localStorage.setItem(memberPhoneStorageKey, currentMemberPhone);
@@ -996,17 +1033,20 @@ function barcodeImgUrl($text) {
         }
     } else if (!currentSearchPhone) {
         const savedPhone = localStorage.getItem(memberPhoneStorageKey);
-        if (savedPhone) {
+        const savedBranchId = localStorage.getItem(memberBranchStorageKey);
+        if (savedPhone && savedBranchId) {
             const restoredUrl = new URL(window.location.href);
+            restoredUrl.searchParams.set('branch_id', savedBranchId);
             restoredUrl.searchParams.set('phone', savedPhone);
             restoredUrl.searchParams.set('restored', '1');
             window.location.replace(restoredUrl.toString());
         }
     }
 
-    if (searchForm && phoneInputEl) {
+    if (searchForm && phoneInputEl && branchSelectEl) {
         searchForm.addEventListener('submit', () => {
             phoneInputEl.value = phoneInputEl.value.trim();
+            branchSelectEl.value = branchSelectEl.value.trim();
         });
     }
 
@@ -1623,6 +1663,7 @@ function barcodeImgUrl($text) {
                     },
                     body: JSON.stringify({
                         action: 'generate_plan',
+                        branch_id: assistantRoot.dataset.branchId,
                         phone: assistantRoot.dataset.memberPhone,
                         age: state.answers.age,
                         weight: state.answers.weight,
