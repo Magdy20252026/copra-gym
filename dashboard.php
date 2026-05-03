@@ -23,8 +23,8 @@ ensureSingleSessionSchema($pdo);
 // جلب اسم الموقع وعدد المستخدمين وعدد الاشتراكات وعدد تمرينات الحصة الواحدة وعدد المشتركين الجدد
 $siteName           = "Gym System";
 $logoPath           = null;
-$userCount          = 0;
-$branchCount        = 0;
+$memberCount        = 0;
+$membersWithDebtsCount = 0;
 $subscriptionCount  = 0;
 $singleSessionCount = 0;
 $newMembersCount    = 0; // اليوم
@@ -38,11 +38,16 @@ try {
         $logoPath = $row['logo_path'];
     }
 
-    $stmt = $pdo->query("SELECT COUNT(*) AS c FROM users");
-    $userCount = (int)$stmt->fetch()['c'];
-
-    $stmt = $pdo->query("SELECT COUNT(*) AS c FROM branches WHERE is_active = 1");
-    $branchCount = (int)$stmt->fetch()['c'];
+    $stmt = $pdo->query("
+        SELECT
+            COUNT(*) AS total_members,
+            SUM(CASE WHEN remaining_amount > 0 THEN 1 ELSE 0 END) AS members_with_debts
+        FROM members
+    ");
+    if ($row = $stmt->fetch()) {
+        $memberCount = (int)($row['total_members'] ?? 0);
+        $membersWithDebtsCount = (int)($row['members_with_debts'] ?? 0);
+    }
 
     $stmt = $pdo->query("SELECT COUNT(*) AS c FROM subscriptions");
     $subscriptionCount = (int)$stmt->fetch()['c'];
@@ -367,6 +372,13 @@ if ($role === 'مشرف' && $userId) {
             display: flex;
             gap: 14px;
             flex-wrap: wrap;
+        }
+
+        .stats-branch-note {
+            margin: 4px 0 2px;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 800;
         }
 
         .stat-card {
@@ -1046,23 +1058,27 @@ if ($role === 'مشرف' && $userId) {
             </div>
         </div>
 
+        <div class="stats-branch-note">
+            الإحصائيات المعروضة تخص الفرع الحالي: <?php echo htmlspecialchars($currentBranchName !== '' ? $currentBranchName : 'غير محدد'); ?>
+        </div>
+
         <!-- كروت الإحصائيات -->
         <div class="stat-cards">
             <div class="stat-card">
                 <div>
-                    <div class="stat-main">عدد المستخدمين</div>
-                    <div class="stat-number"><?php echo $userCount; ?></div>
+                    <div class="stat-main">إجمالي المشتركين بالفرع</div>
+                    <div class="stat-number"><?php echo $memberCount; ?></div>
                 </div>
-                <div class="stat-icon">👥</div>
+                <div class="stat-icon">🧍</div>
             </div>
 
             <div class="stat-card">
                 <div>
-                    <div class="stat-main">الفروع النشطة</div>
-                    <div class="stat-number"><?php echo $branchCount; ?></div>
+                    <div class="stat-main">المشتركون عليهم متبقي</div>
+                    <div class="stat-number"><?php echo $membersWithDebtsCount; ?></div>
                 </div>
                 <div class="stat-icon" style="background:radial-gradient(circle at 30% 0,#0ea5e9,#0284c7);">
-                    🏢
+                    💳
                 </div>
             </div>
 
