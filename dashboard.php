@@ -24,7 +24,7 @@ ensureSingleSessionSchema($pdo);
 $siteName           = "Gym System";
 $logoPath           = null;
 $memberCount        = 0;
-$membersWithDebtsCount = 0;
+$membersWithRemainingBalanceCount = 0;
 $subscriptionCount  = 0;
 $singleSessionCount = 0;
 $newMembersCount    = 0; // اليوم
@@ -42,14 +42,14 @@ try {
     $stmt = $pdo->prepare("
         SELECT
             COUNT(*) AS total_members,
-            SUM(CASE WHEN remaining_amount > 0 THEN 1 ELSE 0 END) AS members_with_debts
+            SUM(CASE WHEN remaining_amount > 0 THEN 1 ELSE 0 END) AS members_with_remaining_balance
         FROM members
         WHERE branch_id = :branch_id
     ");
     $stmt->execute([':branch_id' => $activeBranchId]);
     if ($row = $stmt->fetch()) {
         $memberCount = (int)($row['total_members'] ?? 0);
-        $membersWithDebtsCount = (int)($row['members_with_debts'] ?? 0);
+        $membersWithRemainingBalanceCount = (int)($row['members_with_remaining_balance'] ?? 0);
     }
 
     $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM subscriptions WHERE branch_id = :branch_id");
@@ -1079,8 +1079,8 @@ if ($role === 'مشرف' && $userId) {
 
             <div class="stat-card">
                 <div>
-                    <div class="stat-main">المشتركون عليهم مبالغ متبقية</div>
-                    <div class="stat-number"><?php echo $membersWithDebtsCount; ?></div>
+                    <div class="stat-main">المشتركون الذين عليهم مبالغ متبقية</div>
+                    <div class="stat-number"><?php echo $membersWithRemainingBalanceCount; ?></div>
                 </div>
                 <div class="stat-icon" style="background:radial-gradient(circle at 30% 0,#0ea5e9,#0284c7);">
                     💳
