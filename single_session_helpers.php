@@ -7,6 +7,7 @@ function ensureSingleSessionSchema(PDO $pdo)
         return;
     }
 
+    // تهيئة الجدول وتحديث البيانات القديمة يجب أن تتم بدون فلتر الفرع حتى لا يُضاف شرط branch_id قبل وجود العمود.
     branchAwareSetDisabled(true);
     try {
         $pdo->exec("

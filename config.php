@@ -43,6 +43,7 @@ try {
 }
 
 require_once __DIR__ . '/single_session_helpers.php';
+// مخططات الجداول يجب أن تعمل بدون فلتر الفرع حتى لا تفشل التهيئة قبل اكتمال أعمدة branch_id.
 branchAwareSetDisabled(true);
 try {
     ensureBranchesSchema($pdo);
