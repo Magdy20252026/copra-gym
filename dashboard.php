@@ -52,28 +52,30 @@ try {
         $membersWithDebtsCount = (int)($row['members_with_debts'] ?? 0);
     }
 
-    $stmt = $pdo->query("SELECT COUNT(*) AS c FROM subscriptions");
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM subscriptions WHERE branch_id = :branch_id");
+    $stmt->execute([':branch_id' => $activeBranchId]);
     $subscriptionCount = (int)$stmt->fetch()['c'];
 
-    $stmt = $pdo->query("SELECT COUNT(*) AS c FROM single_session_price");
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM single_session_price WHERE branch_id = :branch_id");
+    $stmt->execute([':branch_id' => $activeBranchId]);
     $singleSessionCount = (int)$stmt->fetch()['c'];
 
     // عدد المشتركين الجدد (اليوم)
     $today = date('Y-m-d');
-    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM members WHERE DATE(created_at) = :today");
-    $stmt->execute([':today' => $today]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM members WHERE branch_id = :branch_id AND DATE(created_at) = :today");
+    $stmt->execute([':branch_id' => $activeBranchId, ':today' => $today]);
     $newMembersCount = (int)$stmt->fetch()['c'];
 
     // عدد المشتركين الجدد خلال آخر 7 أيام (بما فيهم اليوم)
     $weekAgo = date('Y-m-d', strtotime('-6 days')); // من 6 أيام + اليوم = 7 أيام
-    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM members WHERE DATE(created_at) BETWEEN :weekAgo AND :today");
-    $stmt->execute([':weekAgo' => $weekAgo, ':today' => $today]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM members WHERE branch_id = :branch_id AND DATE(created_at) BETWEEN :weekAgo AND :today");
+    $stmt->execute([':branch_id' => $activeBranchId, ':weekAgo' => $weekAgo, ':today' => $today]);
     $newMembersWeek = (int)$stmt->fetch()['c'];
 
     // عدد المشتركين الجدد خلال الشهر الحالي
     $monthStart = date('Y-m-01'); // أول يوم في الشهر الحالي
-    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM members WHERE DATE(created_at) BETWEEN :monthStart AND :today");
-    $stmt->execute([':monthStart' => $monthStart, ':today' => $today]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) AS c FROM members WHERE branch_id = :branch_id AND DATE(created_at) BETWEEN :monthStart AND :today");
+    $stmt->execute([':branch_id' => $activeBranchId, ':monthStart' => $monthStart, ':today' => $today]);
     $newMembersMonth = (int)$stmt->fetch()['c'];
 
 } catch (Exception $e) {}
