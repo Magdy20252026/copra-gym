@@ -30,6 +30,7 @@ $singleSessionCount = 0;
 $newMembersCount    = 0; // اليوم
 $newMembersWeek     = 0; // خلال أسبوع
 $newMembersMonth    = 0; // خلال الشهر
+$activeBranchId     = getActiveBranchSessionId();
 
 try {
     $stmt = $pdo->query("SELECT site_name, logo_path FROM site_settings ORDER BY id ASC LIMIT 1");
@@ -38,12 +39,14 @@ try {
         $logoPath = $row['logo_path'];
     }
 
-    $stmt = $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT
             COUNT(*) AS total_members,
             SUM(CASE WHEN remaining_amount > 0 THEN 1 ELSE 0 END) AS members_with_debts
         FROM members
+        WHERE branch_id = :branch_id
     ");
+    $stmt->execute([':branch_id' => $activeBranchId]);
     if ($row = $stmt->fetch()) {
         $memberCount = (int)($row['total_members'] ?? 0);
         $membersWithDebtsCount = (int)($row['members_with_debts'] ?? 0);
@@ -1074,7 +1077,7 @@ if ($role === 'مشرف' && $userId) {
 
             <div class="stat-card">
                 <div>
-                    <div class="stat-main">المشتركون عليهم متبقي</div>
+                    <div class="stat-main">المشتركون عليهم مبالغ متبقية</div>
                     <div class="stat-number"><?php echo $membersWithDebtsCount; ?></div>
                 </div>
                 <div class="stat-icon" style="background:radial-gradient(circle at 30% 0,#0ea5e9,#0284c7);">
