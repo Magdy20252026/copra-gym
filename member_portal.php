@@ -1012,7 +1012,7 @@ function barcodeImgUrl($text) {
     if (currentSearchBranchId > 0) {
         localStorage.setItem(memberBranchStorageKey, String(currentSearchBranchId));
         if (window.TheClubGymAndroid && typeof window.TheClubGymAndroid.saveLastBranchId === 'function') {
-            window.TheClubGymAndroid.saveLastBranchId(String(currentSearchBranchId));
+            window.TheClubGymAndroid.saveLastBranchId(currentSearchBranchId);
         }
     } else {
         localStorage.removeItem(memberBranchStorageKey);
@@ -1046,7 +1046,6 @@ function barcodeImgUrl($text) {
     if (searchForm && phoneInputEl && branchSelectEl) {
         searchForm.addEventListener('submit', () => {
             phoneInputEl.value = phoneInputEl.value.trim();
-            branchSelectEl.value = branchSelectEl.value.trim();
         });
     }
 

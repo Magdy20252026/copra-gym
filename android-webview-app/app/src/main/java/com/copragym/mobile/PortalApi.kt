@@ -29,9 +29,13 @@ object PortalApi {
     )
 
     fun fetchState(phone: String, branchId: Int, afterId: Int): PortalState? {
+        if (branchId <= 0) {
+            return null
+        }
+
         val query = buildString {
             append("branch_id=")
-            append(branchId.coerceAtLeast(0))
+            append(branchId)
             append("&")
             append("phone=")
             append(URLEncoder.encode(phone, Charsets.UTF_8.name()))
