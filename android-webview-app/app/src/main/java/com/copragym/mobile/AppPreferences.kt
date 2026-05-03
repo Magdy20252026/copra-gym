@@ -34,10 +34,13 @@ object AppPreferences {
     fun getLastBranchId(context: Context): Int = prefs(context).getInt(KEY_LAST_BRANCH_ID, 0)
 
     fun saveLastBranchId(context: Context, branchId: Int) {
-        val normalizedBranchId = branchId.coerceAtLeast(0)
+        if (branchId < 0) {
+            return
+        }
+
         val currentBranchId = getLastBranchId(context)
-        val editor = prefs(context).edit().putInt(KEY_LAST_BRANCH_ID, normalizedBranchId)
-        if (currentBranchId != normalizedBranchId) {
+        val editor = prefs(context).edit().putInt(KEY_LAST_BRANCH_ID, branchId)
+        if (currentBranchId != branchId) {
             editor.putInt(KEY_LAST_NOTIFICATION_ID, 0)
         }
         editor.apply()
