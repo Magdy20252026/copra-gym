@@ -397,8 +397,14 @@ function branchAwareSetDisabled(bool $disabled): void
 function getDefaultBranchId(PDO $pdo): int
 {
     ensureBranchesSchema($pdo);
-    $stmt = $pdo->query("SELECT `id` FROM `branches` WHERE `is_active` = 1 ORDER BY `id` ASC LIMIT 1");
-    $value = $stmt ? $stmt->fetchColumn() : false;
+    branchAwareSetDisabled(true);
+    try {
+        $stmt = $pdo->query("SELECT `id` FROM `branches` WHERE `is_active` = 1 ORDER BY `id` ASC LIMIT 1");
+        $value = $stmt ? $stmt->fetchColumn() : false;
+    } finally {
+        branchAwareSetDisabled(false);
+    }
+
     return $value ? (int)$value : 0;
 }
 
@@ -406,10 +412,15 @@ function getBranches(PDO $pdo, bool $activeOnly = false): array
 {
     ensureBranchesSchema($pdo);
 
-    if ($activeOnly) {
-        $stmt = $pdo->query("SELECT `id`, `branch_name`, `is_active` FROM `branches` WHERE `is_active` = 1 ORDER BY `branch_name` ASC");
-    } else {
-        $stmt = $pdo->query("SELECT `id`, `branch_name`, `is_active` FROM `branches` ORDER BY `branch_name` ASC");
+    branchAwareSetDisabled(true);
+    try {
+        if ($activeOnly) {
+            $stmt = $pdo->query("SELECT `id`, `branch_name`, `is_active` FROM `branches` WHERE `is_active` = 1 ORDER BY `branch_name` ASC");
+        } else {
+            $stmt = $pdo->query("SELECT `id`, `branch_name`, `is_active` FROM `branches` ORDER BY `branch_name` ASC");
+        }
+    } finally {
+        branchAwareSetDisabled(false);
     }
 
     return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
@@ -419,9 +430,14 @@ function getBranchById(PDO $pdo, int $branchId): ?array
 {
     ensureBranchesSchema($pdo);
 
-    $stmt = $pdo->prepare("SELECT `id`, `branch_name`, `is_active` FROM `branches` WHERE `id` = :id LIMIT 1");
-    $stmt->execute([':id' => $branchId]);
-    $branch = $stmt->fetch(PDO::FETCH_ASSOC);
+    branchAwareSetDisabled(true);
+    try {
+        $stmt = $pdo->prepare("SELECT `id`, `branch_name`, `is_active` FROM `branches` WHERE `id` = :id LIMIT 1");
+        $stmt->execute([':id' => $branchId]);
+        $branch = $stmt->fetch(PDO::FETCH_ASSOC);
+    } finally {
+        branchAwareSetDisabled(false);
+    }
 
     return $branch ?: null;
 }

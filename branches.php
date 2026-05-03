@@ -69,7 +69,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($check->fetch()) {
                     $errors[] = "اسم الفرع مستخدم بالفعل.";
                 } else {
-                    $activeBranchesCount = (int)$pdo->query("SELECT COUNT(*) FROM branches WHERE is_active = 1")->fetchColumn();
+                    branchAwareSetDisabled(true);
+                    try {
+                        $activeBranchesCount = (int)$pdo->query("SELECT COUNT(*) FROM branches WHERE is_active = 1")->fetchColumn();
+                    } finally {
+                        branchAwareSetDisabled(false);
+                    }
                     $editedBranch = getBranchById($pdo, $branchId);
 
                     if ((int)($_SESSION['branch_id'] ?? 0) === $branchId && $isActive === 0) {
