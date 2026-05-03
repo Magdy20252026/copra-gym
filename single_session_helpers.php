@@ -7,31 +7,36 @@ function ensureSingleSessionSchema(PDO $pdo)
         return;
     }
 
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS single_session_price (
-            id int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
-            session_name varchar(255) NOT NULL,
-            price decimal(10,2) NOT NULL,
-            updated_at timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-            PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
-    ");
+    branchAwareSetDisabled(true);
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS single_session_price (
+                id int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+                session_name varchar(255) NOT NULL,
+                price decimal(10,2) NOT NULL,
+                updated_at timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+        ");
 
-    ensureSingleSessionTableColumn(
-        $pdo,
-        'single_session_price',
-        'session_name',
-        "ALTER TABLE `single_session_price` ADD COLUMN `session_name` varchar(255) NOT NULL DEFAULT '' AFTER `id`"
-    );
+        ensureSingleSessionTableColumn(
+            $pdo,
+            'single_session_price',
+            'session_name',
+            "ALTER TABLE `single_session_price` ADD COLUMN `session_name` varchar(255) NOT NULL DEFAULT '' AFTER `id`"
+        );
 
-    $pdo->exec("
-        UPDATE `single_session_price`
-        SET `session_name` = CONCAT('تمرينة ', `id`)
-        WHERE `session_name` = '' OR `session_name` IS NULL
-    ");
+        $pdo->exec("
+            UPDATE `single_session_price`
+            SET `session_name` = CONCAT('تمرينة ', `id`)
+            WHERE `session_name` = '' OR `session_name` IS NULL
+        ");
 
-    ensureAttendanceSingleSessionColumns($pdo);
-    ensureAttendanceTypeEnum($pdo);
+        ensureAttendanceSingleSessionColumns($pdo);
+        ensureAttendanceTypeEnum($pdo);
+    } finally {
+        branchAwareSetDisabled(false);
+    }
 
     $schemaReady = true;
 }

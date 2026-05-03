@@ -43,10 +43,15 @@ try {
 }
 
 require_once __DIR__ . '/single_session_helpers.php';
-ensureBranchesSchema($pdo);
-ensureUserBranchesSchema($pdo);
-ensureBranchScopedTablesSchema($pdo);
-ensureSingleSessionSchema($pdo);
+branchAwareSetDisabled(true);
+try {
+    ensureBranchesSchema($pdo);
+    ensureUserBranchesSchema($pdo);
+    ensureBranchScopedTablesSchema($pdo);
+    ensureSingleSessionSchema($pdo);
+} finally {
+    branchAwareSetDisabled(false);
+}
 
 function ensureSubscriptionCategorySchema(PDO $pdo): void
 {
