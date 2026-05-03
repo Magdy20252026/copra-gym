@@ -12,11 +12,6 @@ import java.util.Base64
 class PortalJavascriptBridge(
     private val context: Context,
 ) {
-    private fun scheduleNotifications() {
-        NotificationScheduler.scheduleImmediate(context)
-        NotificationScheduler.schedulePeriodic(context)
-    }
-
     @JavascriptInterface
     fun saveLastMemberPhone(phone: String) {
         AppPreferences.saveLastMemberPhone(context, phone)
@@ -32,13 +27,11 @@ class PortalJavascriptBridge(
     @JavascriptInterface
     fun clearLastMemberPhone() {
         AppPreferences.clearLastMemberPhone(context)
-        AppPreferences.saveLastNotificationId(context, 0)
     }
 
     @JavascriptInterface
     fun clearLastBranchId() {
         AppPreferences.clearLastBranchId(context)
-        AppPreferences.saveLastNotificationId(context, 0)
     }
 
     @JavascriptInterface
@@ -63,5 +56,10 @@ class PortalJavascriptBridge(
         }.onFailure {
             Toast.makeText(context, R.string.download_failed_message, Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun scheduleNotifications() {
+        NotificationScheduler.scheduleImmediate(context)
+        NotificationScheduler.schedulePeriodic(context)
     }
 }
